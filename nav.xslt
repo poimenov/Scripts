@@ -15,8 +15,8 @@
                 <nav epub:type="toc" id="toc">
                     <h1 class="title">Содержание</h1> 
                     <ul>
-                        <li id="ttl"><a href="titlePage.xhtml">EPUB 3.0 Specification</a></li>
-                        <li id="nav"><a href="nav.xhtml">EPUB 3 Specifications - Table of Contents</a></li>                    
+                        <li id="ttl"><a href="titlePage.xhtml">Титульная страниуа</a></li>
+                        <li id="nav"><a href="nav.xhtml">Содержание</a></li>                    
                         <xsl:for-each select="/Objects/Object/Property/Property[generate-id() = generate-id(key('year',text())[1])]">                            
                             <xsl:sort select="text()" />
                             <xsl:variable name="currentYear" select="text()"/>

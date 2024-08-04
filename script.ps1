@@ -36,7 +36,7 @@ Copy-Item "$PSScriptRoot/titlePage.xhtml" -Destination "$basePath/xhtml"
 
 $id = 0
 $items = [System.Collections.ArrayList]::new()
-for ($i = 2; $i -lt 3; $i++) {
+for ($i = 2; $i -lt 135; $i++) {
     #135
     $url = "$baseUrl/$i/"
     $htmlDom = ConvertFrom-Html -Url $url
@@ -98,8 +98,7 @@ for ($i = 2; $i -lt 3; $i++) {
         $outDom = ConvertFrom-HTML -Content $templateDom.OuterHtml
         $outDom.OwnerDocument.OptionOutputAsXml = $true
         $outDom.OwnerDocument.OptionCheckSyntax = $true
-        $outDom.OwnerDocument.OptionFixNestedTags = $true   
-        $outDom.OwnerDocument.Option = $true        
+        $outDom.OwnerDocument.OptionFixNestedTags = $true         
         $outDom.OwnerDocument.Save("$basePath/xhtml/$fileName")        
     }    
 }

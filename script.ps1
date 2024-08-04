@@ -76,32 +76,31 @@ for ($i = 2; $i -lt 3; $i++) {
             $img.Attributes["src"].Value = "../img/$imgName" 
             $item.ImageName = $imgName
         }
-        
-        $templateDom = New-Object System.Xml.XmlDocument
-        $templateDom.Load("$PSScriptRoot/PageTemplate.xhtml")
-        $nsmgr = New-Object System.Xml.XmlNamespaceManager($templateDom.NameTable)
-        $nsmgr.AddNamespace("xhtml", "http://www.w3.org/1999/xhtml")
-        $title = $templateDom.SelectSingleNode('//xhtml:title', $nsmgr)
-        $title.InnerText = $item.Title
-        $body = $templateDom.SelectSingleNode('//xhtml:body', $nsmgr)
-        $refChild = $body.ChildNodes[0];
-        $h1Node = $templateDom.CreateDocumentFragment()
-        $h1Node.InnerXml = $h1.OuterHtml.Replace('<h1', '<h1 xmlns="http://www.w3.org/1999/xhtml"')
-        $body.InsertBefore($h1Node, $refChild);
+                
+        $templateDom = ConvertFrom-HTML -Content (Get-Content -Path "$PSScriptRoot/PageTemplate.xhtml" -Raw)
+        $title = $templateDom.SelectSingleNode('//title')
+        $title.InnerHtml = $item.Title
+        $body = $templateDom.SelectSingleNode('//body')
+        $refChild = $body.ChildNodes[1];
+        $body.InsertBefore($h1, $refChild);
         $date = $item.DateTime.Split('T')[0]
-        $dateDiv = $templateDom.SelectSingleNode('//xhtml:div[@class="post-meta"]', $nsmgr)
-        $dateDiv.InnerXml = "Дата публикации: $date <a xmlns='http://www.w3.org/1999/xhtml' href='nav.xhtml'>вернуться к содержанию</a>"
+        $dateDiv = $templateDom.SelectSingleNode('//div[@class="post-meta"]')
+        $dateDiv.InnerHtml = "Дата публикации: $date <a href='nav.xhtml'>вернуться к содержанию</a>"
         if ($null -ne $img) {
-            $imgNode = $templateDom.CreateDocumentFragment()
-            $imgNode.InnerXml = $img.OuterHtml.Replace('<img', '<img xmlns="http://www.w3.org/1999/xhtml"').Replace('>', '/>')
-            $refChild.AppendChild($imgNode)
+            $refChild.AppendChild($img)
         }
-
-        $psNode = $templateDom.CreateDocumentFragment()
-        $psNode.InnerXml = $ps.OuterHtml.Replace('<p', '<p xmlns="http://www.w3.org/1999/xhtml"')
-        $refChild.AppendChild($psNode)                
+        
+        foreach ($p in $ps) {
+            $refChild.AppendChild($p)
+        }
+        
         $fileName = $item.FileName
-        $templateDom.Save("$basePath/xhtml/$fileName")      
+        $outDom = ConvertFrom-HTML -Content $templateDom.OuterHtml
+        $outDom.OwnerDocument.OptionOutputAsXml = $true
+        $outDom.OwnerDocument.OptionCheckSyntax = $true
+        $outDom.OwnerDocument.OptionFixNestedTags = $true   
+        $outDom.OwnerDocument.Option = $true        
+        $outDom.OwnerDocument.Save("$basePath/xhtml/$fileName")        
     }    
 }
 

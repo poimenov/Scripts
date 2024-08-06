@@ -4,6 +4,26 @@ If (-not (Get-Module -ErrorAction Ignore -ListAvailable PSParseHTML)) {
     Install-Module -Scope CurrentUser PSParseHTML -ErrorAction Stop
 }
 
+function Clear-Mnemonics {
+    param (
+        [parameter(Mandatory = $true)] [string] $Content  
+    )
+
+    return $Content.Replace('&#8230;', '...').Replace('&hellip;', '...').Replace('&ndash;', '-').Replace('&mdash;', '-').Replace('&nbsp;', ' ').Replace('&laquo;', '«').Replace('&raquo;', '»').Replace('&ndash;', '–').Replace('&mdash;', '—').Replace('&bull;', '•').Replace('&copy;', '©').Replace('&reg;', '®').Replace('&trade;', '™').Replace('&quot;', '"').Replace('&apos;', "'")    
+}
+
+function  Update-File {
+    param (
+        [parameter(Mandatory = $true)] [string] $Path,
+        [parameter(Mandatory = $true)] [string] $Url
+    )
+
+    $Content = Get-Content -Path $Path -Raw
+    $Content = $Content.Replace('<span><!--l version="1.0" encoding="UTF-8-->', "<!-- from $Url-->")
+    $Content = $Content.Substring(0, $Content.Length - 7)
+    Set-Content -Path $Path -Value $Content
+}
+
 $baseUrl = 'https://versii.com/politics/page'
 $folderName = 'Zubchenko'
 $basePath = "$PSScriptRoot/$folderName/EPUB"
@@ -70,8 +90,8 @@ for ($i = 2; $i -lt 135; $i++) {
         $h1 = $itemDom.SelectSingleNode('//h1[@class="elementor-heading-title elementor-size-default"]')       
         $ps = $itemDom.SelectNodes('//div[@class="elementor-shortcode"]/p')
         $img = $itemDom.SelectSingleNode('//img[@class="main-thumb-text wp-post-image"]')
-        if ($null -ne $img) {
-            $imgName = $item.FileName.Replace('.xhtml', '.jpg')
+        $imgName = $item.FileName.Replace('.xhtml', '.jpg')
+        if ($null -ne $img) {            
             Invoke-WebRequest $img.Attributes["src"].Value -OutFile "$basePath/img/$imgName"
             $img.Attributes["src"].Value = "../img/$imgName" 
             $item.ImageName = $imgName
@@ -86,11 +106,13 @@ for ($i = 2; $i -lt 135; $i++) {
         $date = $item.DateTime.Split('T')[0]
         $dateDiv = $templateDom.SelectSingleNode('//div[@class="post-meta"]')
         $dateDiv.InnerHtml = "Дата публикации: $date <a href='nav.xhtml'>вернуться к содержанию</a>"
-        if ($null -ne $img) {
+        $imgInFirstP = $ps[0].SelectSingleNode("img[@src='../img/$imgName']")
+        if ($null -ne $img -and $null -eq $imgInFirstP) {
             $refChild.AppendChild($img)
         }
         
         foreach ($p in $ps) {
+            $p.InnerHtml = Clear-Mnemonics -Content $p.InnerHtml
             $refChild.AppendChild($p)
         }
         
@@ -98,8 +120,10 @@ for ($i = 2; $i -lt 135; $i++) {
         $outDom = ConvertFrom-HTML -Content $templateDom.OuterHtml
         $outDom.OwnerDocument.OptionOutputAsXml = $true
         $outDom.OwnerDocument.OptionCheckSyntax = $true
-        $outDom.OwnerDocument.OptionFixNestedTags = $true         
-        $outDom.OwnerDocument.Save("$basePath/xhtml/$fileName")        
+        $outDom.OwnerDocument.OptionFixNestedTags = $true    
+        $filePath = "$basePath/xhtml/$fileName"    
+        $outDom.OwnerDocument.Save($filePath)  
+        Update-File -Path $filePath -Url $item.Url
     }    
 }
 

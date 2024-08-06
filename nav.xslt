@@ -25,13 +25,15 @@
                                     <xsl:for-each select="/Objects/Object/Property/Property[generate-id() = generate-id(key('month',text())[1])]">
                                         <xsl:sort select="text()" />
                                         <xsl:variable name="currentMonth" select="text()"/>
-                                        <li><xsl:apply-templates select="." mode="month" />
-                                            <ul>
-                                                <xsl:apply-templates select="/Objects/Object/Property[Property[@Name='Year']=$currentYear and Property[@Name='Month']=$currentMonth]" mode="item">
-                                                    <xsl:sort select="Property[@Name='DateTime']" />
-                                                </xsl:apply-templates>
-                                            </ul>
-                                        </li> 
+                                        <xsl:if test="/Objects/Object/Property[Property[@Name='Year']=$currentYear and Property[@Name='Month']=$currentMonth]">
+                                            <li><xsl:apply-templates select="." mode="month" />
+                                                <ul>
+                                                    <xsl:apply-templates select="/Objects/Object/Property[Property[@Name='Year']=$currentYear and Property[@Name='Month']=$currentMonth]" mode="item">
+                                                        <xsl:sort select="Property[@Name='DateTime']" />
+                                                    </xsl:apply-templates>
+                                                </ul>
+                                            </li>
+                                        </xsl:if>           
                                     </xsl:for-each>
                                 </ul>
                             </li>
@@ -70,7 +72,6 @@
             <xsl:when test="text()='10'">Октябрь</xsl:when>
             <xsl:when test="text()='11'">Ноябрь</xsl:when>
             <xsl:when test="text()='12'">Декабрь</xsl:when>
-            <xsl:otherwise><xsl:value-of select="concat(.,' (Неизвестный месяц)')"/></xsl:otherwise>
         </xsl:choose>
     </xsl:template>
 </xsl:stylesheet>

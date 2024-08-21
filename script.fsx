@@ -7,8 +7,6 @@ open System.IO.Compression
 open System.Xml.Linq
 open System.Xml.Xsl
 
-
-
 let author = "Александр Зубченко"
 let baseUrl = "https://versii.com/politics/page"
 let folderName = "Zubchenko"
@@ -235,4 +233,4 @@ if File.Exists(itemsPath) then
 
 //Finish
 printfn "Finish at %s" (DateTime.Now.ToString())
-printf $"Done! {epubPath}"
+printfn $"Done! {epubPath}"

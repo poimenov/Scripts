@@ -1,11 +1,13 @@
 #r "nuget: FSharp.Data,6.4.0"
 
 open FSharp.Data
-open System.Xml.Linq
-open System.IO
-open System.Xml.Xsl
-open System.IO.Compression
 open System
+open System.IO
+open System.IO.Compression
+open System.Xml.Linq
+open System.Xml.Xsl
+
+
 
 let author = "Александр Зубченко"
 let baseUrl = "https://versii.com/politics/page"
@@ -44,7 +46,7 @@ type Item =
 let getHtmlPage (url: string, i: int) = HtmlDocument.Load(url + $"/{i}")
 
 let rec convertHtmlNodeToXElement (node: HtmlNode) : XElement =
-    let element = XElement(ns + node.Name(), node.InnerText())
+    let element = XElement(ns + node.Name(), node.DirectInnerText())
 
     for attribute in node.Attributes() do
         element.SetAttributeValue(attribute.Name(), attribute.Value())
@@ -55,10 +57,10 @@ let rec convertHtmlNodeToXElement (node: HtmlNode) : XElement =
     element
 
 let saveXhtml (content: HtmlNode, path: string, title: string, dateTime: string, imgPath: string) =
-    let content = convertHtmlNodeToXElement (content)
+    let xElement = convertHtmlNodeToXElement (content)
 
     if imgPath <> "" then
-        let img = content.Descendants(ns + "img") |> Seq.head
+        let img = xElement.Descendants(ns + "img") |> Seq.head
         img.SetAttributeValue("src", imgPath)
 
     let xDoc = XDocument.Load($"{sourceDirectory}/PageTemplate.xhtml")
@@ -75,13 +77,13 @@ let saveXhtml (content: HtmlNode, path: string, title: string, dateTime: string,
     let dt = dateTime.Split('T').[0]
     dateTimeNode.SetValue($"Дата публикации: {dt} ")
 
-    let xHref =
+    let aNode =
         new XElement(ns + "a", new XAttribute("href", "nav.xhtml"), "вернуться к содержанию")
 
-    dateTimeNode.Add(xHref)
+    dateTimeNode.Add(aNode)
 
     let target = divs |> Seq.head
-    target.Add(content.Descendants())
+    target.ReplaceWith(xElement)
 
     xDoc.Save(path)
 

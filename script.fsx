@@ -11,10 +11,11 @@ let author = "Александр Зубченко"
 let baseUrl = "https://versii.com/politics/page"
 let folderName = "Zubchenko"
 let sourceDirectory = __SOURCE_DIRECTORY__
-let folderPath = $"{sourceDirectory}/{folderName}"
-let basePath = $"{folderPath}/EPUB"
-let itemsPath = $"{sourceDirectory}/items.xml"
-let epubPath = $"{sourceDirectory}/{folderName}.epub"
+let (+/) path1 path2 = Path.Combine(path1, path2)
+let folderPath = sourceDirectory +/ folderName
+let basePath = folderPath +/ "EPUB"
+let itemsPath = sourceDirectory +/ "items.xml"
+let epubPath = sourceDirectory +/ $"{folderName}.epub"
 let ns: XNamespace = XNamespace.Get("http://www.w3.org/1999/xhtml")
 
 type Item =
@@ -61,7 +62,7 @@ let saveXhtml (content: HtmlNode, path: string, title: string, dateTime: string,
         let img = xElement.Descendants(ns + "img") |> Seq.head
         img.SetAttributeValue("src", imgPath)
 
-    let xDoc = XDocument.Load($"{sourceDirectory}/PageTemplate.xhtml")
+    let xDoc = XDocument.Load(sourceDirectory +/ "PageTemplate.xhtml")
 
     let titleNode = xDoc.Descendants(ns + "title") |> Seq.head
     titleNode.SetValue(title)
@@ -85,7 +86,6 @@ let saveXhtml (content: HtmlNode, path: string, title: string, dateTime: string,
 
     xDoc.Save(path)
 
-
 let getItem (id: int, htmlItem: HtmlNode) =
     let h4 = htmlItem.Descendants [ "h4" ] |> Seq.head
     let header = h4.Descendants [ "a" ] |> Seq.head
@@ -108,16 +108,16 @@ let getItem (id: int, htmlItem: HtmlNode) =
     let imgPath =
         if (imgs |> Seq.length) > 0 then
             let src = (imgs |> Seq.head).AttributeValue("src")
-            [ src; $"img/{name}.jpg" ]
+            [ src; "img" +/ $"{name}.jpg" ]
         else
-            [ ""; "" ]
+            list<string>.Empty
 
-    if (imgPath[0] <> "" && imgPath[1] <> "") then
+    if (imgPath.Length > 0) then
         match Http.Request(imgPath[0]).Body with
-        | Binary bytes -> File.WriteAllBytes($"{basePath}/{imgPath[1]}", bytes)
+        | Binary bytes -> File.WriteAllBytes(basePath +/ imgPath[1], bytes)
         | Text(_) -> ignore ()
 
-    saveXhtml (content, $"{basePath}/xhtml/{name}.xhtml", title.InnerText(), time.InnerText(), imgPath[1])
+    saveXhtml (content, basePath +/ "xhtml" +/ $"{name}.xhtml", title.InnerText(), time.InnerText(), imgPath[1])
 
     new Item(
         id + 1,
@@ -125,7 +125,7 @@ let getItem (id: int, htmlItem: HtmlNode) =
         header.InnerText(),
         url,
         time.AttributeValue("datetime"),
-        name + ".xhtml",
+        $"{name}.xhtml",
         imgPath[1],
         time.AttributeValue("datetime").Split("-").[0],
         time.AttributeValue("datetime").Split("-").[1]
@@ -195,16 +195,16 @@ if File.Exists(epubPath) then
 
 //Create the folder structure
 Directory.CreateDirectory(folderPath) |> ignore
-Directory.CreateDirectory($"{folderPath}/META-INF") |> ignore
+Directory.CreateDirectory(folderPath +/ "META-INF") |> ignore
 Directory.CreateDirectory(basePath) |> ignore
-Directory.CreateDirectory($"{basePath}/xhtml") |> ignore
-Directory.CreateDirectory($"{basePath}/img") |> ignore
-Directory.CreateDirectory($"{basePath}/css") |> ignore
+Directory.CreateDirectory(basePath +/ "xhtml") |> ignore
+Directory.CreateDirectory(basePath +/ "img") |> ignore
+Directory.CreateDirectory(basePath +/ "css") |> ignore
 //and copy fiiles
-File.WriteAllLines($"{folderPath}/mimetype", [| "application/epub+zip" |])
-File.Copy($"{sourceDirectory}/container.xml", $"{folderPath}/META-INF/container.xml")
-File.Copy($"{sourceDirectory}/style.css", $"{basePath}/css/style.css")
-File.Copy($"{sourceDirectory}/titlePage.xhtml", $"{basePath}/xhtml/titlePage.xhtml")
+File.WriteAllLines(folderPath +/ "mimetype", [| "application/epub+zip" |])
+File.Copy(sourceDirectory +/ "container.xml", folderPath +/ "META-INF" +/ "container.xml")
+File.Copy(sourceDirectory +/ "style.css", basePath +/ "css" +/ "style.css")
+File.Copy(sourceDirectory +/ "titlePage.xhtml", basePath +/ "xhtml" +/ "titlePage.xhtml")
 
 //create files for epub
 [ 2..135 ]
@@ -215,11 +215,11 @@ File.Copy($"{sourceDirectory}/titlePage.xhtml", $"{basePath}/xhtml/titlePage.xht
 
 //transform xslt
 let xslt = new XslCompiledTransform()
-xslt.Load($"{sourceDirectory}/nav.xslt")
-xslt.Transform(itemsPath, $"{basePath}/xhtml/nav.xhtml")
+xslt.Load(sourceDirectory +/ "nav.xslt")
+xslt.Transform(itemsPath, basePath +/ "xhtml" +/ "nav.xhtml")
 
-xslt.Load($"{sourceDirectory}/package.xslt")
-xslt.Transform(itemsPath, $"{basePath}/package.opf")
+xslt.Load(sourceDirectory +/ "package.xslt")
+xslt.Transform(itemsPath, basePath +/ "package.opf")
 
 //create epub
 ZipFile.CreateFromDirectory(folderPath, epubPath)

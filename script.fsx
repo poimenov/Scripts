@@ -42,7 +42,8 @@ type Item =
               Month = month }
     end
 
-let getHtmlPage (url: string, i: int) = HtmlDocument.Load(url + $"/{i}")
+let getAsyncHtmlPage (url: string, i: int) =
+    async { return! HtmlDocument.AsyncLoad(url + $"/{i}") }
 
 let rec convertHtmlNodeToXElement (node: HtmlNode) : XElement =
     let element = XElement(ns + node.Name(), node.DirectInnerText())
@@ -86,50 +87,57 @@ let saveXhtml (content: HtmlNode, path: string, title: string, dateTime: string,
 
     xDoc.Save(path)
 
-let getItem (id: int, htmlItem: HtmlNode) =
-    let h4 = htmlItem.Descendants [ "h4" ] |> Seq.head
-    let header = h4.Descendants [ "a" ] |> Seq.head
-    let url = header.AttributeValue("href")
-    let time = htmlItem.Descendants [ "time" ] |> Seq.head
-    let name = url.Split("/").[4]
-    let doc = HtmlDocument.Load(url)
+let getAsyncItem (id: int, htmlItem: HtmlNode) =
+    async {
+        let h4 = htmlItem.Descendants [ "h4" ] |> Seq.head
+        let header = h4.Descendants [ "a" ] |> Seq.head
+        let url = header.AttributeValue("href")
+        let time = htmlItem.Descendants [ "time" ] |> Seq.head
+        let name = url.Split("/").[4]
 
-    let content =
-        doc.Body().Descendants [ "div" ]
-        |> Seq.filter (fun x -> x.AttributeValue("class") = "elementor-shortcode")
-        |> Seq.item 1
+        let! doc = HtmlDocument.AsyncLoad(url)
 
-    let title = doc.Body().Descendants [ "h1" ] |> Seq.head
+        let content =
+            doc.Body().Descendants [ "div" ]
+            |> Seq.filter (fun x -> x.AttributeValue("class") = "elementor-shortcode")
+            |> Seq.item 1
 
-    let imgs =
-        content.Descendants [ "img" ]
-        |> Seq.filter (fun x -> x.AttributeValue("class").Contains("wp-post-image"))
+        let title = doc.Body().Descendants [ "h1" ] |> Seq.head
 
-    let imgPath =
-        if (imgs |> Seq.length) > 0 then
-            let src = (imgs |> Seq.head).AttributeValue("src")
-            [ src; "img" +/ $"{name}.jpg" ]
-        else
-            list<string>.Empty
+        let imgs =
+            content.Descendants [ "img" ]
+            |> Seq.filter (fun x -> x.AttributeValue("class").Contains("wp-post-image"))
 
-    if (imgPath.Length > 0) then
-        match Http.Request(imgPath[0]).Body with
-        | Binary bytes -> File.WriteAllBytes(basePath +/ imgPath[1], bytes)
-        | Text(_) -> ignore ()
+        let imgPath =
+            if (imgs |> Seq.length) > 0 then
+                let src = (imgs |> Seq.head).AttributeValue("src")
+                [ src; $"img/{name}.jpg" ]
+            else
+                [ ""; "" ]
 
-    saveXhtml (content, basePath +/ "xhtml" +/ $"{name}.xhtml", title.InnerText(), time.InnerText(), imgPath[1])
+        if (imgPath[0] <> "") then
+            let! response = Http.AsyncRequest(imgPath[0])
 
-    new Item(
-        id + 1,
-        author,
-        header.InnerText(),
-        url,
-        time.AttributeValue("datetime"),
-        $"{name}.xhtml",
-        imgPath[1],
-        time.AttributeValue("datetime").Split("-").[0],
-        time.AttributeValue("datetime").Split("-").[1]
-    )
+            match response.Body with
+            | Binary bytes -> File.WriteAllBytes(basePath +/ imgPath[1], bytes)
+            | Text(_) -> ignore ()
+
+        saveXhtml (content, basePath +/ "xhtml" +/ $"{name}.xhtml", title.InnerText(), time.InnerText(), imgPath[1])
+
+        return
+            new Item(
+                id + 1,
+                author,
+                header.InnerText(),
+                url,
+                time.AttributeValue("datetime"),
+                $"{name}.xhtml",
+                imgPath[1],
+                time.AttributeValue("datetime").Split("-").[0],
+                time.AttributeValue("datetime").Split("-").[1]
+            )
+    }
+
 
 let serializeItem (item: Item) =
     let id = new XElement("Property", new XAttribute("Name", "Id"), item.Id)
@@ -208,9 +216,13 @@ File.Copy(sourceDirectory +/ "titlePage.xhtml", basePath +/ "xhtml" +/ "titlePag
 
 //create files for epub
 [ 2..135 ]
-|> Seq.map (fun x -> getHtmlPage (baseUrl, x))
+|> Seq.map (fun x -> getAsyncHtmlPage (baseUrl, x))
+|> fun getPages -> Async.Parallel(getPages, 5)
+|> Async.RunSynchronously
 |> Seq.collect getHtmlItems
-|> Seq.mapi (fun i el -> getItem (i, el))
+|> Seq.mapi (fun i el -> getAsyncItem (i, el))
+|> fun getItems -> Async.Parallel(getItems, 5)
+|> Async.RunSynchronously
 |> serializeItems
 
 //transform xslt

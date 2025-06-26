@@ -36,6 +36,7 @@ let downloadFileAsync (file: FileDescription) (outputFolder: string) =
 
                 use fileStream = File.Create outputPath
                 do! response.ResponseStream.CopyToAsync fileStream |> Async.AwaitTask
+                printfn "Скачан файл: %s" outputPath
             | _ -> printfn "Ошибка при скачивании %s: %d" file.Url response.StatusCode
 
         with ex ->
@@ -78,13 +79,29 @@ let downloadAudiobook (bookUrl: string) (outputDir: string) =
         | None -> printfn "Не удалось извлечь аудиофайлы."
         | Some links ->
             printfn "Найдено файлов: %d" (Seq.length links)
-            links |> Seq.iter (fun file -> printfn "Файл: %s" file.Url)
             let! _ = downloadFilesAsync links outputDir
             printfn "Готово!"
     }
+let trimTrailingSlash (url: string) =
+    if url.EndsWith("/") then
+        url.Substring(0, url.Length - 1)
+    else
+        url
 
-//Здесь задать нужную ссылку:
-let bookUrl = "https://knigavuhe.org/book/shljagery"//"https://knigavuhe.org/book/biblija" // замените на нужную ссылку
-let outputDir = Path.Combine(sourceDirectory, bookUrl.Split('/') |> Array.last)
-downloadAudiobook bookUrl outputDir |> Async.RunSynchronously
-// Использовать: dotnet fsi knigavuhe.fsx
+//пример bookUrl: https://knigavuhe.org/book/biblija/
+let main (args: string []) =
+    if args.Length < 1 then
+        printfn "Использование: dotnet fsi knigavuhe.fsx <bookUrl>"
+        Environment.Exit 1
+
+    let bookUrl = trimTrailingSlash args.[0]
+
+    if not (Uri.IsWellFormedUriString(bookUrl, UriKind.Absolute)) then
+        printfn "Некорректный URL книги: %s" bookUrl
+        Environment.Exit 1
+
+    let outputDir = Path.Combine(sourceDirectory, bookUrl.Split('/') |> Array.last)
+    downloadAudiobook bookUrl outputDir |> Async.RunSynchronously
+
+
+fsi.CommandLineArgs |> Array.toList |> List.tail |> List.toArray |> main

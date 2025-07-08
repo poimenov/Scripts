@@ -40,7 +40,7 @@ let downloadFileAsync (file: FileDescription) (outputFolder: string) =
             | _ -> printfn "Ошибка при скачивании %s: %d" file.Url response.StatusCode
 
         with ex ->
-            printfn "%A" ex
+            printfn "Ошибка при скачивании %s: %A" file.Url ex.Message
     }
 
 let downloadFilesAsync (files: seq<FileDescription>) (outputFolder: string) =

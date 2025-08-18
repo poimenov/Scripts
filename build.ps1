@@ -46,12 +46,17 @@ New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 
 # 2. Get application version
 Write-Host "`nGetting application version..." -ForegroundColor Cyan
-$version = dotnet minver --output version
-if (-not $version) {
-    $version = "1.0.0" # Fallback version
+$xdoc = [System.Xml.Linq.XDocument]::Load((Resolve-Path $projectPath))
+$nodes = $xdoc.Root.Element("PropertyGroup").DescendantNodes().Where({ $_.Name.LocalName -eq "Version" })
+if ($nodes.Count -eq 1) {
+    $versionNode = $nodes | Select-Object -First 1
+    $version = $versionNode.Value.Trim()
+    Write-Host "Version found in project file: $version" -ForegroundColor Green
 }
-
-Write-Host "Detected version: $version" -ForegroundColor Green
+else {
+    $version = "1.0.0"  
+    Write-Host "No version found in project file, using default: $version" -ForegroundColor Yellow 
+}
 
 # 3. Build and publish for each platform
 foreach ($rid in $RuntimeIdentifiers) {

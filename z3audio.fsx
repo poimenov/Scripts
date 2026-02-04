@@ -12,20 +12,21 @@
 
 //https://funcui.avaloniaui.net/
 
+open System
+open System.Collections.ObjectModel
+open System.IO
 open Avalonia
 open Avalonia.Controls
+open Avalonia.Data
 open Avalonia.FuncUI
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Hosts
-open System.Collections.ObjectModel
-open Avalonia.Data
+open Avalonia.Input
 open Avalonia.Layout
-open System.IO
+open Avalonia.Media.Imaging
 open FluentIcons.Avalonia
 open FSharp.Data
 open FSharp.Data.JsonExtensions
-open System
-open Avalonia.Input
 open LibVLCSharp.Shared
 
 [<AutoOpen>]
@@ -271,6 +272,7 @@ type MainWindow() as this =
         base.Title <- "z3.fm - Music Search/Download"
         base.Width <- 800.0
         base.Height <- 500.0
+        base.Icon <- new WindowIcon(new Bitmap(Path.Combine(__SOURCE_DIRECTORY__, "img/Fsharp_logo.png")))
         this.Content <- Views.main ()
 
 

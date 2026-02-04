@@ -3,9 +3,14 @@
 RadioBrowser Script screen:
 ![Screenshot of the script UI](/img/radioBrowser.Script.jpg)
 
+Z3audio Script screen:
+![Screenshot of the script UI](/img/z3audio.Script.jpg)
+
 ## Description
 
 RadioBrowser script for playing radio stations from [radio browser](https://www.radio-browser.info/)
+
+Z3audio script for searching, listening and downloading music from the site "z3.fm"
 
 ### Prerequisites
 
@@ -24,6 +29,11 @@ To run RadioBrowser script:
 ```bash
 dotnet fsi RadioBrowser.fsx
 ```
+To run Z3audio script:
+
+```bash
+dotnet fsi z3audio.fsx
+```
 
 If you run into problems in linux, you may need to install vlc and vlc dev related libraries
 
@@ -38,4 +48,4 @@ If you still have issues you can refer to this [guide](https://code.videolan.org
 sudo apt install libx11-dev
 ```
 
-I tested this script on Ubuntu 22.04 and Ubuntu 24.04 with .Net SDK 8.0
+I tested this script on Ubuntu 24.04 with .Net SDK 10.0

@@ -104,7 +104,10 @@ type Views =
 
             let doSearch =
                 async {
-                    searchButtonEnabled.Set(false)
+                    searchButtonEnabled.Set false
+                    if isPlaying.Current then
+                        player.Current.Stop()
+                        isPlaying.Set false                    
 
                     try
                         let! text = getAsyncSearch searchText.Current
@@ -169,7 +172,7 @@ type Views =
                 async {
                     if isPlaying.Current then
                         player.Current.Stop()
-                        isPlaying.Set(false)
+                        isPlaying.Set false
                     else
                         play |> Async.Start
                 }

@@ -6,6 +6,7 @@
 #r "nuget: Avalonia.FuncUI"
 #r "nuget: FSharp.Data"
 #r "nuget: LibVLCSharp"
+#r "nuget: FluentIcons.Avalonia"
 
 #endif
 
@@ -20,11 +21,25 @@ open System.Collections.ObjectModel
 open Avalonia.Data
 open Avalonia.Layout
 open System.IO
+open FluentIcons.Avalonia
 open FSharp.Data
 open FSharp.Data.JsonExtensions
 open System
 open Avalonia.Input
 open LibVLCSharp.Shared
+
+[<AutoOpen>]
+module SymbolIcon =
+    open Avalonia.FuncUI.Types
+    open Avalonia.FuncUI.Builder
+    open FluentIcons.Common
+    open FluentIcons.Avalonia
+
+    let create (attrs: IAttr<SymbolIcon> list) : IView<SymbolIcon> = ViewBuilder.Create<SymbolIcon> attrs
+
+    type SymbolIcon with
+        static member symbol<'t when 't :> SymbolIcon>(value: Symbol) : IAttr<'t> =
+            AttrBuilder<'t>.CreateProperty<Symbol>(SymbolIcon.SymbolProperty, value, ValueNone)
 
 type Track(id, title, artistId, artist, duration, downloadUrl, href) =
     member val Id = id with get, set
@@ -37,7 +52,6 @@ type Track(id, title, artistId, artist, duration, downloadUrl, href) =
 
 [<AbstractClass; Sealed>]
 type Views =
-
     static member main() =
         Component(fun ctx ->
             let data = ctx.useState (ObservableCollection<Track>([]))
@@ -96,7 +110,7 @@ type Views =
                         let! text = getAsyncSearch searchText.Current
                         let arrJson = JsonValue.Parse(text).AsArray()
                         let tracks = arrJson |> Seq.map getTrack |> Seq.toList |> ObservableCollection
-                        data.Set(tracks)
+                        data.Set tracks
                     with ex ->
                         printfn "%A" ex
 
@@ -128,7 +142,7 @@ type Views =
                         with ex ->
                             printfn "%A" ex
 
-                        downloadButtonEnabled.Set(true)
+                        downloadButtonEnabled.Set true
                 }
 
             let play =
@@ -162,22 +176,30 @@ type Views =
 
             DockPanel.create
                 [ DockPanel.children
-                      [ StackPanel.create
-                            [ StackPanel.orientation Orientation.Horizontal
-                              StackPanel.dock Dock.Top
-                              StackPanel.margin 4
-                              StackPanel.children
+                      [ Grid.create
+                            [ Grid.dock Dock.Top
+                              Grid.margin 4
+                              Grid.columnDefinitions "*, Auto, Auto, Auto"
+                              Grid.rowDefinitions "Auto, *"
+                              Grid.children
                                   [ TextBox.create
-                                        [ TextBox.margin 4
+                                        [ Grid.column 0
+                                          Grid.row 0
+                                          TextBox.margin 4
                                           TextBox.watermark "Search music"
-                                          TextBox.width 510
+                                          TextBox.horizontalAlignment HorizontalAlignment.Stretch
                                           TextBox.onKeyDown (fun e ->
                                               if e.Key = Key.Enter then
                                                   Async.StartImmediate doSearch)
                                           TextBox.onTextChanged (fun e -> searchText.Set(e)) ]
                                     Button.create
-                                        [ Button.content "Search"
-                                          Button.width 90
+                                        [ Grid.column 1;Grid.row 0
+                                          Button.content  (
+                                                    SymbolIcon.create
+                                                  [ SymbolIcon.width 24
+                                                    SymbolIcon.height 24
+                                                    SymbolIcon.symbol FluentIcons.Common.Symbol.Search ]
+                                          )
                                           Button.isEnabled (
                                               searchButtonEnabled.Current
                                               && not (String.IsNullOrWhiteSpace searchText.Current)
@@ -185,14 +207,28 @@ type Views =
                                           Button.horizontalContentAlignment HorizontalAlignment.Center
                                           Button.onClick (fun _ -> Async.StartImmediate doSearch) ]
                                     Button.create
-                                        [ Button.content (if isPlaying.Current then "Stop" else "Play")
-                                          Button.width 90
+                                        [ Grid.column 2;Grid.row 0
+                                          Button.content (
+                                              SymbolIcon.create
+                                                  [ SymbolIcon.width 24
+                                                    SymbolIcon.height 24
+                                                    SymbolIcon.symbol
+                                                        (if isPlaying.Current then
+                                                            FluentIcons.Common.Symbol.Stop
+                                                         else
+                                                            FluentIcons.Common.Symbol.Play) ]
+                                          )
                                           Button.isEnabled (selectedItem.Current.IsSome && playEnabled.Current)
                                           Button.horizontalContentAlignment HorizontalAlignment.Center
                                           Button.onClick (fun _ -> Async.StartImmediate playStop) ]
                                     Button.create
-                                        [ Button.content "Download"
-                                          Button.width 90
+                                        [ Grid.column 3;Grid.row 0
+                                          Button.content (
+                                              SymbolIcon.create
+                                                  [ SymbolIcon.width 24
+                                                    SymbolIcon.height 24
+                                                    SymbolIcon.symbol FluentIcons.Common.Symbol.ArrowDownload ]
+                                          )
                                           Button.isEnabled (
                                               selectedItem.Current.IsSome && downloadButtonEnabled.Current
                                           )
@@ -200,6 +236,8 @@ type Views =
                                           Button.onClick (fun _ -> Async.StartImmediate doDownload) ] ] ]
                         DataGrid.create
                             [ DataGrid.dock Dock.Top
+                              Grid.row 1
+                              Grid.columnSpan 4
                               DataGrid.isReadOnly true
                               DataGrid.items data.Current
                               DataGrid.onSelectedItemChanged (fun item ->
@@ -216,7 +254,7 @@ type Views =
                                           DataGridTextColumn.binding (Binding "Artist") ]
                                     DataGridTextColumn.create
                                         [ DataGridTextColumn.header "Title"
-                                          DataGridTextColumn.width (DataGridLength 490.0)
+                                          DataGridTextColumn.width (DataGridLength(490.0, DataGridLengthUnitType.Star))
                                           DataGridTextColumn.binding (Binding "Title") ]
                                     DataGridTextColumn.create
                                         [ DataGridTextColumn.header "Duration"

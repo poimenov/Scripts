@@ -392,11 +392,11 @@ type Views =
                     searchButtonEnabled.Set false
 
                     if not isPlaying.Current then
-                        playEnabled.Set(false)
+                        playEnabled.Set false
 
                     try
                         items.Current.Clear()
-                        let options = getSearchOptions (Nullable.op_Implicit (0u))
+                        let options = getSearchOptions (Nullable.op_Implicit 0u)
 
                         if
                             String.IsNullOrEmpty options.Name
@@ -541,16 +541,17 @@ type Views =
                                                             [ Image.create
                                                                   [ Image.source svgImage
                                                                     Image.tip countryName
+                                                                    Image.verticalAlignment VerticalAlignment.Center
                                                                     Image.margin (2, 0, 6, 0)
                                                                     Image.width 22
                                                                     Image.height 16 ]
                                                               SymbolIcon.create
                                                                   [ SymbolIcon.symbol Symbol.Star
-                                                                    SymbolIcon.width 16
-                                                                    SymbolIcon.height 16
+                                                                    SymbolIcon.width 20
+                                                                    SymbolIcon.height 20
                                                                     SymbolIcon.margin (2, 0, 2, 0)
                                                                     SymbolIcon.iconVariant (
-                                                                        if isStationFavorite (item) then
+                                                                        if isStationFavorite item then
                                                                             IconVariant.Filled
                                                                         else
                                                                             IconVariant.Regular
@@ -561,6 +562,7 @@ type Views =
                                                                     TextBlock.textTrimming
                                                                         TextTrimming.CharacterEllipsis
                                                                     TextBlock.textWrapping TextWrapping.NoWrap
+                                                                    TextBlock.verticalAlignment VerticalAlignment.Center
                                                                     TextBlock.width (textWidth - 50.0)
                                                                     TextBlock.fontSize 14.0 ] ] ]
                                                   TextBlock.create

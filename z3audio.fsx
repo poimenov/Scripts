@@ -195,7 +195,7 @@ type Views =
                                           TextBox.onKeyDown (fun e ->
                                               if e.Key = Key.Enter then
                                                   Async.StartImmediate doSearch)
-                                          TextBox.onTextChanged (fun e -> searchText.Set(e)) ]
+                                          TextBox.onTextChanged (fun e -> searchText.Set e) ]
                                     Button.create
                                         [ Grid.column 1;Grid.row 0
                                           Button.content  (

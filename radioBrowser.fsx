@@ -445,7 +445,7 @@ type Views =
 
                                     printfn $"{e.MetadataType}: {media.Meta e.MetadataType}")
                             else
-                                playEnabled.Set(true)
+                                playEnabled.Set true
                                 printfn "Url: %A MediaParseStatus: %A" selectedItem.Current.Value.Url result
                         with ex ->
                             printfn "%A" ex

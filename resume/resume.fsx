@@ -24,18 +24,10 @@ open PuppeteerSharp
 open PuppeteerSharp.Media
 open Avalonia.Controls.Primitives
 
-let generatePdfFromHtml (htmlContent: string, outputPath: string) =
-    task {
-        let browserFetcher = new BrowserFetcher()
-        let! _installedBrowser = browserFetcher.DownloadAsync()
-        use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true))
-        use! page = browser.NewPageAsync()
-        do! page.SetContentAsync htmlContent
-        let pdfOptions = PdfOptions(Format = PaperFormat.A4, 
-            DisplayHeaderFooter = false, 
-            MarginOptions = new MarginOptions(Top = "5mm", Bottom = "5mm", Left = "5mm", Right = "5mm"))
-        do! page.PdfAsync(outputPath, pdfOptions)
-    }
+type GenerateToFormat =
+    | Pdf
+    | Xml
+    | Html
 
 let emailRegex = Regex("^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled)
 let phoneRegex = Regex("^\+?[0-9\s\-()]+$", RegexOptions.Compiled)
@@ -99,8 +91,7 @@ let tryMakeUri (s:string) : Uri option =
             if File.Exists(s) then Some(Uri(Path.GetFullPath(s)))
             else None
 
-let saveResumeXml (outputDir:string,
-                  picturePath:string,
+let getXmlDoc (picturePath:string,
                   name:string,
                   headline:string,
                   email:string,
@@ -108,19 +99,15 @@ let saveResumeXml (outputDir:string,
                   location:string,
                   links:ObservableCollection<string>,
                   summary:string) =
-    // If the picture path refers to a local file, read it and embed the
-    // image as a base64 data URI.  Puppeteer often blocks file:// URLs when
-    // loading content via `page.SetContentAsync`, so embedding avoids
-    // external requests and guarantees the image appears in the PDF.
     let embedPicture (path:string) : string =
         if String.IsNullOrWhiteSpace path then ""
         else
             try
                 // try to interpret the string as a URI first
-                let uri = Uri(path)
+                let uri = Uri path
                 let filePath = if uri.IsFile then uri.LocalPath else path
-                if File.Exists(filePath) then
-                    let bytes = File.ReadAllBytes(filePath)
+                if File.Exists filePath then
+                    let bytes = File.ReadAllBytes filePath
                     let mime =
                         match Path.GetExtension(filePath).ToLowerInvariant() with
                         | ".jpg" | ".jpeg" -> "image/jpeg"
@@ -134,10 +121,8 @@ let saveResumeXml (outputDir:string,
                     // if file doesn't exist, just return original string
                     path
             with
-            | _ -> path
-
+            | _ -> path                  
     let pictureValue = embedPicture picturePath
-
     let doc =
         XDocument(
             XElement("resume",
@@ -153,17 +138,29 @@ let saveResumeXml (outputDir:string,
                 XElement("summary", summary)
             )
         )
-    let xmlPath = Path.Combine(outputDir, "resume.xml")
-    doc.Save xmlPath
-    xmlPath
+    doc
 
-let transformXmlToHtml (xmlPath:string) =
+let transformXmlToHtml (doc:XDocument) =
     let xsltPath = Path.Combine(__SOURCE_DIRECTORY__, "xslt", "resume-to-html.xslt")
     let xslt = new XslCompiledTransform()
     xslt.Load xsltPath
-    let htmlPath = Path.ChangeExtension(xmlPath, ".html")
-    xslt.Transform(xmlPath, htmlPath)
-    htmlPath
+    use stringWriter = new StringWriter()
+    use docReader = doc.CreateReader()
+    xslt.Transform(docReader, null, stringWriter)
+    stringWriter.ToString()
+
+let generatePdfFromHtml (htmlContent: string, outputPath: string) =
+    task {
+        let browserFetcher = new BrowserFetcher()
+        let! _installedBrowser = browserFetcher.DownloadAsync()
+        use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true))
+        use! page = browser.NewPageAsync()
+        do! page.SetContentAsync htmlContent
+        let pdfOptions = PdfOptions(Format = PaperFormat.A4, 
+            DisplayHeaderFooter = false, 
+            MarginOptions = new MarginOptions(Top = "5mm", Bottom = "5mm", Left = "5mm", Right = "5mm"))
+        do! page.PdfAsync(outputPath, pdfOptions)
+    }    
 
 [<AbstractClass; Sealed>]
 type Views =
@@ -206,26 +203,33 @@ type Views =
                         else
                             null
 
-            let generateResume () =
+            let generateResume (format:GenerateToFormat) =
                 async {
                     if String.IsNullOrWhiteSpace outputFolderState.Current then
                         let! opt = chooseFolder()
                         opt |> Option.iter (fun f -> outputFolderState.Set f.AbsolutePath)
                     if not (String.IsNullOrWhiteSpace outputFolderState.Current) then
-                        let xml = saveResumeXml (
-                                    outputFolderState.Current,
-                                    pictureUriState.Current |> Option.map (fun u -> u.AbsoluteUri) |> Option.defaultValue "",
-                                    nameState.Current,
-                                    headlineState.Current,
-                                    emailState.Current,
-                                    phoneState.Current,
-                                    locationState.Current,
-                                    linksState.Current,
-                                    summaryState.Current)
-                        let html = transformXmlToHtml xml
-                        let htmlContent = File.ReadAllText html
-                        let pdfPath = Path.Combine(outputFolderState.Current, "resume.pdf")
-                        do! generatePdfFromHtml(htmlContent, pdfPath) |> Async.AwaitTask
+                        let xml = getXmlDoc (
+                                        pictureUriState.Current |> Option.map (fun u -> u.OriginalString) |> Option.defaultValue "",
+                                        nameState.Current,
+                                        headlineState.Current,
+                                        emailState.Current,
+                                        phoneState.Current,
+                                        locationState.Current,
+                                        linksState.Current,
+                                        summaryState.Current)
+                        match format with
+                        | GenerateToFormat.Xml -> 
+                            let xmlPath = Path.Combine(outputFolderState.Current, "resume.xml")
+                            xml.Save xmlPath
+                        | GenerateToFormat.Html ->
+                            let html = transformXmlToHtml xml
+                            let htmlPath = Path.Combine(outputFolderState.Current, "resume.html")
+                            File.WriteAllText(htmlPath, html)
+                        | GenerateToFormat.Pdf ->
+                             let html = transformXmlToHtml xml
+                             let pdfPath = Path.Combine(outputFolderState.Current, "resume.pdf")
+                             do! generatePdfFromHtml(html, pdfPath) |> Async.AwaitTask
                 } |> Async.StartImmediate
 
             // load data from an existing resume XML file and populate UI states
@@ -437,10 +441,26 @@ type Views =
                                         Button.content "Load from XML"
                                         Button.onClick (fun _ -> loadFromXml())
                                     ]
-                                    Button.create [
-                                        Button.content "Generate PDF"
-                                        Button.onClick (fun _ -> generateResume())
-                                    ]
+                                    SplitButton.create [
+                                        SplitButton.content "Save As"
+                                        SplitButton.flyout (
+                                            MenuFlyout.create [
+                                                MenuFlyout.placement PlacementMode.BottomEdgeAlignedRight
+                                                MenuFlyout.dataItems [ Xml; Html; Pdf ]
+                                                MenuFlyout.itemTemplate (
+                                                    DataTemplateView<_>.create (fun (format: GenerateToFormat) -> 
+                                                        MenuItem.create [
+                                                            MenuItem.width 60.0
+                                                            MenuItem.height 20.0
+                                                            MenuItem.padding (Thickness(2.0))
+                                                            MenuItem.margin (Thickness(0.0))
+                                                            MenuItem.header (match format with Xml -> "XML" | Html -> "HTML" | Pdf -> "PDF")
+                                                            MenuItem.onClick (fun _ -> generateResume format)
+                                                        ]
+                                                    )
+                                                )
+                                            ]
+                                        )]
                                 ]
                             ]
                         ]

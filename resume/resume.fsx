@@ -51,15 +51,34 @@ let choosePicturePath () =
             else return Some (Seq.head res).Path
     }
 
-let chooseFolder () =
+// helper that shows a SaveFilePicker and returns the chosen file path, or None if cancelled
+let chooseFile(format : GenerateToFormat) =
     async {
         let win = getMainWindow()
         if isNull win then return None
         else
-            let options = FolderPickerOpenOptions()
-            let! res = win.StorageProvider.OpenFolderPickerAsync options |> Async.AwaitTask
-            if Seq.isEmpty res then return None
-            else return Some (Seq.head res).Path
+            let options = FilePickerSaveOptions()
+            options.Title <- sprintf "Save resume as a %A file" format
+            options.ShowOverwritePrompt <- true
+            options.DefaultExtension <-
+                match format with
+                | GenerateToFormat.Xml -> "xml"
+                | GenerateToFormat.Html -> "html"
+                | GenerateToFormat.Pdf -> "pdf"
+            options.SuggestedFileName <- sprintf "resume.%s" options.DefaultExtension
+            options.SuggestedFileType <- 
+                 match format with
+                 | GenerateToFormat.Xml -> FilePickerFileType "*.xml"
+                 | GenerateToFormat.Html -> FilePickerFileType "*.html"
+                 | GenerateToFormat.Pdf -> FilePickerFileType "*.pdf"       
+            options.FileTypeChoices <- [
+                match format with
+                | GenerateToFormat.Xml -> FilePickerFileType "*.xml"
+                | GenerateToFormat.Html -> FilePickerFileType "*.html"
+                | GenerateToFormat.Pdf -> FilePickerFileType "*.pdf"
+            ]            
+            use! file = win.StorageProvider.SaveFilePickerAsync options |> Async.AwaitTask
+            return if isNull file then None else Some file.Path
     }
 
 // similar helper to select an XML file for importing
@@ -177,7 +196,6 @@ type Views =
             let locationState = ctx.useState ""
             let linksState = ctx.useState (ObservableCollection<string>())
             let summaryState = ctx.useState ""
-            let outputFolderState = ctx.useState __SOURCE_DIRECTORY__
             let newLinkState = ctx.useState ""
 
             let imgSource =
@@ -203,12 +221,9 @@ type Views =
                         else
                             null
 
-            let generateResume (format:GenerateToFormat) =
+            let generateResume (format:GenerateToFormat, filePath: string) =
                 async {
-                    if String.IsNullOrWhiteSpace outputFolderState.Current then
-                        let! opt = chooseFolder()
-                        opt |> Option.iter (fun f -> outputFolderState.Set f.AbsolutePath)
-                    if not (String.IsNullOrWhiteSpace outputFolderState.Current) then
+                    if not (String.IsNullOrWhiteSpace filePath) then
                         let xml = getXmlDoc (
                                         pictureUriState.Current |> Option.map (fun u -> u.OriginalString) |> Option.defaultValue "",
                                         nameState.Current,
@@ -220,16 +235,13 @@ type Views =
                                         summaryState.Current)
                         match format with
                         | GenerateToFormat.Xml -> 
-                            let xmlPath = Path.Combine(outputFolderState.Current, "resume.xml")
-                            xml.Save xmlPath
+                            xml.Save filePath 
                         | GenerateToFormat.Html ->
                             let html = transformXmlToHtml xml
-                            let htmlPath = Path.Combine(outputFolderState.Current, "resume.html")
-                            File.WriteAllText(htmlPath, html)
+                            File.WriteAllText(filePath, html)
                         | GenerateToFormat.Pdf ->
                              let html = transformXmlToHtml xml
-                             let pdfPath = Path.Combine(outputFolderState.Current, "resume.pdf")
-                             do! generatePdfFromHtml(html, pdfPath) |> Async.AwaitTask
+                             do! generatePdfFromHtml(html, filePath) |> Async.AwaitTask
                 } |> Async.StartImmediate
 
             // load data from an existing resume XML file and populate UI states
@@ -427,16 +439,7 @@ type Views =
                                 StackPanel.orientation Orientation.Horizontal
                                 StackPanel.horizontalAlignment HorizontalAlignment.Right
                                 StackPanel.verticalAlignment VerticalAlignment.Bottom
-                                StackPanel.children [
-                                    Button.create [
-                                        Button.content "Change Output Folder"
-                                        Button.tip (sprintf "Current: %s" outputFolderState.Current)
-                                        Button.onClick (fun _ ->
-                                            async {
-                                                let! opt = chooseFolder()
-                                                opt |> Option.iter (fun f -> outputFolderState.Set (HttpUtility.UrlDecode f.AbsolutePath))
-                                            } |> Async.StartImmediate)
-                                    ]                                    
+                                StackPanel.children [                                 
                                     Button.create [
                                         Button.content "Load from XML"
                                         Button.onClick (fun _ -> loadFromXml())
@@ -455,7 +458,13 @@ type Views =
                                                             MenuItem.padding (Thickness(2.0))
                                                             MenuItem.margin (Thickness(0.0))
                                                             MenuItem.header (match format with Xml -> "XML" | Html -> "HTML" | Pdf -> "PDF")
-                                                            MenuItem.onClick (fun _ -> generateResume format)
+                                                            MenuItem.onClick (fun _ ->
+                                                                async {
+                                                                    let! filePathOpt = chooseFile format
+                                                                    match filePathOpt with
+                                                                    | Some uri -> generateResume(format, HttpUtility.UrlDecode uri.LocalPath)
+                                                                    | None -> ()
+                                                                } |> Async.StartImmediate)
                                                         ]
                                                     )
                                                 )

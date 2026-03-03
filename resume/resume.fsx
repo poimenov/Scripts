@@ -32,6 +32,15 @@ type GenerateToFormat =
 let emailRegex = Regex("^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled)
 let phoneRegex = Regex("^\+?[0-9\s\-()]+$", RegexOptions.Compiled)
 
+let isValidUrl (url: string) =
+    try
+        let uri = new Uri(url)
+        (uri.Scheme = Uri.UriSchemeHttp || uri.Scheme = Uri.UriSchemeHttps) && uri.IsAbsoluteUri
+    with
+
+    | :? UriFormatException -> false
+    | _ -> false
+
 let getMainWindow() =
     match Application.Current.ApplicationLifetime with
     | :? ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime as desktop -> desktop.MainWindow
@@ -103,11 +112,11 @@ let tryMakeUri (s:string) : Uri option =
         try
             let u = Uri(s, UriKind.RelativeOrAbsolute)
             if not u.IsAbsoluteUri && File.Exists(s) then
-                Some(Uri(Path.GetFullPath(s)))
+                Some(Uri(Path.GetFullPath s))
             else
                 Some u
         with _ ->
-            if File.Exists(s) then Some(Uri(Path.GetFullPath(s)))
+            if File.Exists(s) then Some(Uri(Path.GetFullPath s))
             else None
 
 let getXmlDoc (picturePath:string,
@@ -195,6 +204,7 @@ type Views =
             let phoneState = ctx.useState ""
             let locationState = ctx.useState ""
             let linksState = ctx.useState (ObservableCollection<string>())
+            let selectedLinkState = ctx.useState ""
             let summaryState = ctx.useState ""
             let newLinkState = ctx.useState ""
 
@@ -203,13 +213,13 @@ type Views =
                 | None -> null
                 | Some uri ->
                     let s = uri.OriginalString
-                    if s.StartsWith("data:") then
+                    if s.StartsWith "data:" then
                         // data URI: decode base64 and create bitmap from stream
                         try
                             let comma = s.IndexOf(',')
                             if comma >= 0 then
                                 let base64 = s.Substring(comma + 1)
-                                let bytes = Convert.FromBase64String(base64)
+                                let bytes = Convert.FromBase64String base64
                                 use ms = new MemoryStream(bytes)
                                 new Bitmap(ms)
                             else null
@@ -255,7 +265,7 @@ type Views =
                             if uri.IsFile then uri.LocalPath
                             else uri.OriginalString
                         try
-                            let doc = XDocument.Load(path)
+                            let doc = XDocument.Load path
                             let get name =
                                 let el = doc.Root.Element(XName.Get name)
                                 if isNull el then "" else el.Value
@@ -276,7 +286,7 @@ type Views =
                             let linksEl = doc.Root.Element(XName.Get "links")
                             if not (isNull linksEl) then
                                 for linkNode in linksEl.Elements(XName.Get "link") do
-                                    linksState.Current.Add(linkNode.Value)
+                                    linksState.Current.Add linkNode.Value
                             summaryState.Set(get "summary")
                         with ex ->
                             // just log; UI doesn't have a logger
@@ -376,8 +386,13 @@ type Views =
                                                             TextBox.text locationState.Current
                                                             TextBox.onTextChanged (fun t -> locationState.Set t)
                                                         ]
-                                                        TextBlock.create [ TextBlock.text "Links" ]
-                                                        ListBox.create [ ListBox.dataItems linksState.Current ]
+                                                        TextBlock.create [ TextBlock.text "Links:" ]
+                                                        ListBox.create [ 
+                                                            ListBox.dataItems linksState.Current 
+                                                            ListBox.selectionMode SelectionMode.Single
+                                                            ListBox.selectedItem selectedLinkState.Current
+                                                            ListBox.onSelectedItemChanged (fun item -> selectedLinkState.Set (item |> string))
+                                                            ]
                                                         StackPanel.create [
                                                             StackPanel.orientation Orientation.Horizontal
                                                             StackPanel.spacing 2.0
@@ -390,10 +405,25 @@ type Views =
                                                                 ]
                                                                 Button.create [
                                                                     Button.content "Add"
+                                                                    Button.horizontalAlignment HorizontalAlignment.Center
+                                                                    Button.width 70.0
                                                                     Button.onClick (fun _ ->
-                                                                        if not (String.IsNullOrWhiteSpace newLinkState.Current) then
+                                                                        if not (String.IsNullOrWhiteSpace newLinkState.Current) 
+                                                                            && isValidUrl newLinkState.Current
+                                                                            && linksState.Current.Contains newLinkState.Current |> not then
                                                                             linksState.Current.Add newLinkState.Current
                                                                             newLinkState.Set ""
+                                                                    )
+                                                                ]
+                                                                Button.create [
+                                                                    Button.content "Remove"
+                                                                    Button.width 70.0
+                                                                    Button.horizontalAlignment HorizontalAlignment.Center
+                                                                    Button.isEnabled (not(String.IsNullOrEmpty selectedLinkState.Current))
+                                                                    Button.onClick (fun _ ->
+                                                                        if linksState.Current.Contains selectedLinkState.Current then
+                                                                            if linksState.Current.Remove selectedLinkState.Current then
+                                                                                selectedLinkState.Set ""
                                                                     )
                                                                 ]
                                                             ]

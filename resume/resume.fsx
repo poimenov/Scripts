@@ -23,6 +23,8 @@ open Avalonia.Platform.Storage
 open PuppeteerSharp
 open PuppeteerSharp.Media
 open Avalonia.Controls.Primitives
+open Avalonia.Styling
+open Avalonia.Media
 
 type GenerateToFormat =
     | Pdf
@@ -188,7 +190,7 @@ let generatePdfFromHtml (htmlContent: string, outputPath: string) =
             DisplayHeaderFooter = false, 
             MarginOptions = new MarginOptions(Top = "5mm", Bottom = "5mm", Left = "5mm", Right = "5mm"))
         do! page.PdfAsync(outputPath, pdfOptions)
-    }    
+    } 
 
 [<AbstractClass; Sealed>]
 type Views =
@@ -393,18 +395,23 @@ type Views =
                                                             ListBox.selectedItem selectedLinkState.Current
                                                             ListBox.onSelectedItemChanged (fun item -> selectedLinkState.Set (item |> string))
                                                             ]
-                                                        StackPanel.create [
-                                                            StackPanel.orientation Orientation.Horizontal
-                                                            StackPanel.spacing 2.0
-                                                            StackPanel.children [
+                                                        Grid.create [
+                                                            Grid.columnDefinitions "*, Auto, Auto"
+                                                            Grid.children [
                                                                 TextBox.create [
+                                                                    Grid.column 0
                                                                     TextBox.watermark "New link"
-                                                                    TextBox.width 300.0
+                                                                    TextBox.margin (0, 0, 2, 0)
+                                                                    TextBox.horizontalAlignment HorizontalAlignment.Stretch
                                                                     TextBox.text newLinkState.Current
                                                                     TextBox.onTextChanged (fun t -> newLinkState.Set t)
+                                                                    if newLinkState.Current <> "" &&  not(isValidUrl newLinkState.Current) then
+                                                                        TextBox.classes [ "invalid" ]                                                                    
                                                                 ]
                                                                 Button.create [
+                                                                    Grid.column 1
                                                                     Button.content "Add"
+                                                                    Button.margin (0, 0, 2, 0)
                                                                     Button.horizontalAlignment HorizontalAlignment.Center
                                                                     Button.width 70.0
                                                                     Button.onClick (fun _ ->
@@ -416,6 +423,7 @@ type Views =
                                                                     )
                                                                 ]
                                                                 Button.create [
+                                                                    Grid.column 2
                                                                     Button.content "Remove"
                                                                     Button.width 70.0
                                                                     Button.horizontalAlignment HorizontalAlignment.Center
@@ -513,10 +521,16 @@ type MainWindow() as this =
     inherit HostWindow()
 
     do
+        let invalidTextBoxStyle = 
+            let style =Style(fun x -> x.OfType<TextBox>().Class "invalid")
+            style.Setters.Add(Setter(TextBox.BorderBrushProperty, Brushes.Red))
+            style :> IStyle
+        
         base.Title <- "Resume Generator"
         base.Width <- 800.0
         base.Height <- 500.0
         base.Icon <- new WindowIcon(new Bitmap(Path.Combine(__SOURCE_DIRECTORY__, "../img/Fsharp_logo.png")))
+        base.Styles.Add invalidTextBoxStyle
         this.Content <- Views.main ()
 
 

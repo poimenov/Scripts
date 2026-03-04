@@ -31,63 +31,120 @@ type GenerateToFormat =
     | Xml
     | Html
 
+[<Serializable>]
+type Education
+    (school: string, degree: string, area: string, grade: string, location: string, period: string, website: string) =
+    member val School = school with get, set
+    member val Degree = degree with get, set
+    member val Area = area with get, set
+    member val Grade = grade with get, set
+    member val Location = location with get, set
+    member val Period = period with get, set
+    member val Website = website with get, set
+
+[<Serializable>]
+type Experience(company: string, website: Uri, position: string, location: string, period: string, description: string)
+    =
+    member val Company = company with get, set
+    member val Website = website with get, set
+    member val Position = position with get, set
+    member val Location = location with get, set
+    member val Period = period with get, set
+    member val Description = description with get, set
+
+[<Serializable>]
+type Language(name: string, fluency: string, level: int) =
+    member val Name = name with get, set
+    member val Fluency = fluency with get, set
+    member val Level = level with get, set
+
+[<Serializable>]
+type Skill(name: string, keywords: string list) =
+    member val Name = name with get, set
+    member val Keywords = keywords with get, set
+
+[<Serializable>]
+type Certification(title: string, issuer: string, date: string, label: string, website: Uri) =
+    member val Title = title with get, set
+    member val Issuer = issuer with get, set
+    member val Date = date with get, set
+    member val Label = label with get, set
+    member val Website = website with get, set
+
 let emailRegex = Regex("^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled)
 let phoneRegex = Regex("^\+?[0-9\s\-()]+$", RegexOptions.Compiled)
 
 let isValidUrl (url: string) =
     try
         let uri = new Uri(url)
-        (uri.Scheme = Uri.UriSchemeHttp || uri.Scheme = Uri.UriSchemeHttps) && uri.IsAbsoluteUri
+
+        (uri.Scheme = Uri.UriSchemeHttp || uri.Scheme = Uri.UriSchemeHttps)
+        && uri.IsAbsoluteUri
     with
 
     | :? UriFormatException -> false
     | _ -> false
 
-let getMainWindow() =
+let getMainWindow () =
     match Application.Current.ApplicationLifetime with
     | :? ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime as desktop -> desktop.MainWindow
     | _ -> null
 
 let choosePicturePath () =
     async {
-        let win = getMainWindow()
-        if isNull win then return None
+        let win = getMainWindow ()
+
+        if isNull win then
+            return None
         else
             let options = FilePickerOpenOptions()
             options.AllowMultiple <- false
             options.Title <- "Choose a picture"
-            options.FileTypeFilter <- ["*.jpg"; "*.jpeg"; "*.png"; "*.bmp"; "*.gif"] |> List.map (fun pattern -> FilePickerFileType pattern)
+
+            options.FileTypeFilter <-
+                [ "*.jpg"; "*.jpeg"; "*.png"; "*.bmp"; "*.gif" ]
+                |> List.map (fun pattern -> FilePickerFileType pattern)
+
             let! res = win.StorageProvider.OpenFilePickerAsync options |> Async.AwaitTask
-            if Seq.isEmpty res then return None
-            else return Some (Seq.head res).Path
+
+            if Seq.isEmpty res then
+                return None
+            else
+                return Some (Seq.head res).Path
     }
 
 // helper that shows a SaveFilePicker and returns the chosen file path, or None if cancelled
-let chooseFile(format : GenerateToFormat) =
+let chooseFile (format: GenerateToFormat) =
     async {
-        let win = getMainWindow()
-        if isNull win then return None
+        let win = getMainWindow ()
+
+        if isNull win then
+            return None
         else
             let options = FilePickerSaveOptions()
             options.Title <- sprintf "Save resume as a %A file" format
             options.ShowOverwritePrompt <- true
+
             options.DefaultExtension <-
                 match format with
                 | GenerateToFormat.Xml -> "xml"
                 | GenerateToFormat.Html -> "html"
                 | GenerateToFormat.Pdf -> "pdf"
+
             options.SuggestedFileName <- sprintf "resume.%s" options.DefaultExtension
-            options.SuggestedFileType <- 
-                 match format with
-                 | GenerateToFormat.Xml -> FilePickerFileType "*.xml"
-                 | GenerateToFormat.Html -> FilePickerFileType "*.html"
-                 | GenerateToFormat.Pdf -> FilePickerFileType "*.pdf"       
-            options.FileTypeChoices <- [
+
+            options.SuggestedFileType <-
                 match format with
                 | GenerateToFormat.Xml -> FilePickerFileType "*.xml"
                 | GenerateToFormat.Html -> FilePickerFileType "*.html"
                 | GenerateToFormat.Pdf -> FilePickerFileType "*.pdf"
-            ]            
+
+            options.FileTypeChoices <-
+                [ match format with
+                  | GenerateToFormat.Xml -> FilePickerFileType "*.xml"
+                  | GenerateToFormat.Html -> FilePickerFileType "*.html"
+                  | GenerateToFormat.Pdf -> FilePickerFileType "*.pdf" ]
+
             use! file = win.StorageProvider.SaveFilePickerAsync options |> Async.AwaitTask
             return if isNull file then None else Some file.Path
     }
@@ -95,82 +152,101 @@ let chooseFile(format : GenerateToFormat) =
 // similar helper to select an XML file for importing
 let chooseXmlPath () =
     async {
-        let win = getMainWindow()
-        if isNull win then return None
+        let win = getMainWindow ()
+
+        if isNull win then
+            return None
         else
             let options = FilePickerOpenOptions()
             options.AllowMultiple <- false
             options.Title <- "Choose resume XML"
-            options.FileTypeFilter <- ["*.xml"] |> List.map (fun pattern -> FilePickerFileType pattern)
+            options.FileTypeFilter <- [ "*.xml" ] |> List.map (fun pattern -> FilePickerFileType pattern)
             let! res = win.StorageProvider.OpenFilePickerAsync options |> Async.AwaitTask
-            if Seq.isEmpty res then return None
-            else return Some (Seq.head res).Path
+
+            if Seq.isEmpty res then
+                return None
+            else
+                return Some (Seq.head res).Path
     }
 
 // helper that tries to create a Uri from an arbitrary string
-let tryMakeUri (s:string) : Uri option =
-    if String.IsNullOrWhiteSpace s then None
+let tryMakeUri (s: string) : Uri option =
+    if String.IsNullOrWhiteSpace s then
+        None
     else
         try
             let u = Uri(s, UriKind.RelativeOrAbsolute)
+
             if not u.IsAbsoluteUri && File.Exists(s) then
                 Some(Uri(Path.GetFullPath s))
             else
                 Some u
         with _ ->
-            if File.Exists(s) then Some(Uri(Path.GetFullPath s))
-            else None
+            if File.Exists(s) then
+                Some(Uri(Path.GetFullPath s))
+            else
+                None
 
-let getXmlDoc (picturePath:string,
-                  name:string,
-                  headline:string,
-                  email:string,
-                  phone:string,
-                  location:string,
-                  links:ObservableCollection<string>,
-                  summary:string) =
-    let embedPicture (path:string) : string =
-        if String.IsNullOrWhiteSpace path then ""
+let getXmlDoc
+    (
+        picturePath: string,
+        name: string,
+        headline: string,
+        email: string,
+        phone: string,
+        location: string,
+        links: ObservableCollection<string>,
+        summary: string
+    ) =
+    let embedPicture (path: string) : string =
+        if String.IsNullOrWhiteSpace path then
+            ""
         else
             try
                 // try to interpret the string as a URI first
                 let uri = Uri path
                 let filePath = if uri.IsFile then uri.LocalPath else path
+
                 if File.Exists filePath then
                     let bytes = File.ReadAllBytes filePath
+
                     let mime =
                         match Path.GetExtension(filePath).ToLowerInvariant() with
-                        | ".jpg" | ".jpeg" -> "image/jpeg"
+                        | ".jpg"
+                        | ".jpeg" -> "image/jpeg"
                         | ".png" -> "image/png"
                         | ".gif" -> "image/gif"
                         | ".bmp" -> "image/bmp"
                         | _ -> "application/octet-stream"
+
                     let base64 = Convert.ToBase64String(bytes)
                     sprintf "data:%s;base64,%s" mime base64
                 else
                     // if file doesn't exist, just return original string
                     path
-            with
-            | _ -> path                  
+            with _ ->
+                path
+
     let pictureValue = embedPicture picturePath
+
     let doc =
         XDocument(
-            XElement("resume",
+            XElement(
+                "resume",
                 XElement("picturePath", pictureValue),
                 XElement("name", name),
                 XElement("headline", headline),
                 XElement("email", email),
                 XElement("phone", phone),
                 XElement("location", location),
-                XElement("links",
-                    links |> Seq.map (fun l -> XElement("link", l)) |> Seq.toArray
-                ),
+                XElement("links", links |> Seq.map (fun l -> XElement("link", l)) |> Seq.toArray),
                 XElement("summary", summary)
             )
         )
+
     doc
 
-let transformXmlToHtml (doc:XDocument) =
+let transformXmlToHtml (doc: XDocument) =
     let xsltPath = Path.Combine(__SOURCE_DIRECTORY__, "xslt", "resume-to-html.xslt")
     let xslt = new XslCompiledTransform()
     xslt.Load xsltPath
@@ -186,26 +262,35 @@ let generatePdfFromHtml (htmlContent: string, outputPath: string) =
         use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true))
         use! page = browser.NewPageAsync()
         do! page.SetContentAsync htmlContent
-        let pdfOptions = PdfOptions(Format = PaperFormat.A4, 
-            DisplayHeaderFooter = false, 
-            MarginOptions = new MarginOptions(Top = "5mm", Bottom = "5mm", Left = "5mm", Right = "5mm"))
+
+        let pdfOptions =
+            PdfOptions(
+                Format = PaperFormat.A4,
+                DisplayHeaderFooter = false,
+                MarginOptions = new MarginOptions(Top = "5mm", Bottom = "5mm", Left = "5mm", Right = "5mm")
+            )
+
         do! page.PdfAsync(outputPath, pdfOptions)
-    } 
+    }
 
 [<AbstractClass; Sealed>]
 type Views =
     static member main() =
         Component(fun ctx ->
             // states
-            let mkExpander (attrs:IAttr<Expander> list) : IView<Expander> =
-                ViewBuilder.Create<Expander> attrs
-            let pictureUriState : IWritable<Uri option> = ctx.useState None
+            let mkExpander (attrs: IAttr<Expander> list) : IView<Expander> = ViewBuilder.Create<Expander> attrs
+            let pictureUriState: IWritable<Uri option> = ctx.useState None
             let nameState = ctx.useState ""
             let headlineState = ctx.useState ""
             let emailState = ctx.useState ""
             let phoneState = ctx.useState ""
             let locationState = ctx.useState ""
             let linksState = ctx.useState (ObservableCollection<string>())
+            let experiencesState = ctx.useState (ObservableCollection<Experience>())
+            let skillsState = ctx.useState (ObservableCollection<Skill>())
+            let certificationsState = ctx.useState (ObservableCollection<Certification>())
+            let languagesState = ctx.useState (ObservableCollection<Language>())
+            let educationsState = ctx.useState (ObservableCollection<Education>())
             let selectedLinkState = ctx.useState ""
             let summaryState = ctx.useState ""
             let newLinkState = ctx.useState ""
@@ -215,69 +300,82 @@ type Views =
                 | None -> null
                 | Some uri ->
                     let s = uri.OriginalString
+
                     if s.StartsWith "data:" then
                         // data URI: decode base64 and create bitmap from stream
                         try
                             let comma = s.IndexOf(',')
+
                             if comma >= 0 then
                                 let base64 = s.Substring(comma + 1)
                                 let bytes = Convert.FromBase64String base64
                                 use ms = new MemoryStream(bytes)
                                 new Bitmap(ms)
-                            else null
-                        with _ -> null
+                            else
+                                null
+                        with _ ->
+                            null
                     else
                         let path = HttpUtility.UrlDecode uri.AbsolutePath
+
                         if not (String.IsNullOrWhiteSpace path) && File.Exists path then
                             new Bitmap(path)
                         else
                             null
 
-            let generateResume (format:GenerateToFormat, filePath: string) =
+            let generateResume (format: GenerateToFormat, filePath: string) =
                 async {
                     if not (String.IsNullOrWhiteSpace filePath) then
-                        let xml = getXmlDoc (
-                                        pictureUriState.Current |> Option.map (fun u -> u.OriginalString) |> Option.defaultValue "",
-                                        nameState.Current,
-                                        headlineState.Current,
-                                        emailState.Current,
-                                        phoneState.Current,
-                                        locationState.Current,
-                                        linksState.Current,
-                                        summaryState.Current)
+                        let xml =
+                            getXmlDoc (
+                                pictureUriState.Current
+                                |> Option.map (fun u -> u.OriginalString)
+                                |> Option.defaultValue "",
+                                nameState.Current,
+                                headlineState.Current,
+                                emailState.Current,
+                                phoneState.Current,
+                                locationState.Current,
+                                linksState.Current,
+                                summaryState.Current
+                            )
+
                         match format with
-                        | GenerateToFormat.Xml -> 
-                            xml.Save filePath 
+                        | GenerateToFormat.Xml -> xml.Save filePath
                         | GenerateToFormat.Html ->
                             let html = transformXmlToHtml xml
                             File.WriteAllText(filePath, html)
                         | GenerateToFormat.Pdf ->
-                             let html = transformXmlToHtml xml
-                             do! generatePdfFromHtml(html, filePath) |> Async.AwaitTask
-                } |> Async.StartImmediate
+                            let html = transformXmlToHtml xml
+                            do! generatePdfFromHtml (html, filePath) |> Async.AwaitTask
+                }
+                |> Async.StartImmediate
 
             // load data from an existing resume XML file and populate UI states
             let loadFromXml () =
                 async {
-                    let! opt = chooseXmlPath()
+                    let! opt = chooseXmlPath ()
+
                     match opt with
                     | Some uri ->
                         // chooseXmlPath returns a Uri, so convert to filesystem path
-                        let path =
-                            if uri.IsFile then uri.LocalPath
-                            else uri.OriginalString
+                        let path = if uri.IsFile then uri.LocalPath else uri.OriginalString
+
                         try
                             let doc = XDocument.Load path
+
                             let get name =
                                 let el = doc.Root.Element(XName.Get name)
                                 if isNull el then "" else el.Value
                             // picture may be embedded data URI or file path
                             let pic = get "picturePath"
+
                             if not (String.IsNullOrWhiteSpace pic) then
                                 // set state directly with the option result
                                 pictureUriState.Set(tryMakeUri pic)
                             else
                                 pictureUriState.Set(None)
+
                             nameState.Set(get "name")
                             headlineState.Set(get "headline")
                             emailState.Set(get "email")
@@ -286,246 +384,294 @@ type Views =
                             // clear and repopulate links
                             linksState.Current.Clear()
                             let linksEl = doc.Root.Element(XName.Get "links")
+
                             if not (isNull linksEl) then
                                 for linkNode in linksEl.Elements(XName.Get "link") do
                                     linksState.Current.Add linkNode.Value
+
                             summaryState.Set(get "summary")
                         with ex ->
                             // just log; UI doesn't have a logger
                             printfn "Failed to load XML '%s': %s" path ex.Message
                     | None -> ()
-                } |> Async.StartImmediate
+                }
+                |> Async.StartImmediate
 
-            DockPanel.create [
-                DockPanel.children [
-                    Grid.create [
-                        Grid.dock Dock.Top
-                        Grid.margin 4
-                        Grid.columnDefinitions "*"
-                        Grid.rowDefinitions "*, Auto"
-                        Grid.children [
-                            ScrollViewer.create [
-                                Grid.row 0
-                                ScrollViewer.content (
-                                    // compute each expander view ahead of time
-                                    let pictureExpander =
-                                        mkExpander [
-                                            Expander.header "Picture"
-                                            Expander.horizontalAlignment HorizontalAlignment.Stretch
-                                            Expander.content (
-                                                StackPanel.create [
-                                                    StackPanel.orientation Orientation.Horizontal
-                                                    StackPanel.verticalAlignment VerticalAlignment.Center
-                                                    StackPanel.spacing 2.0
-                                                    StackPanel.children [
-                                                        Image.create [
-                                                            Image.source imgSource
-                                                            Image.maxHeight 90.0
-                                                            Image.maxWidth 90.0
-                                                        ]                                                                
-                                                        TextBox.create [
-                                                            TextBox.watermark "Image path"
-                                                            TextBox.width 300.0
-                                                            TextBox.height 30.0
-                                                            TextBox.text (
-                                                                pictureUriState.Current
-                                                                |> Option.map (fun u -> u.OriginalString)
-                                                                |> Option.defaultValue "")
-                                                            TextBox.onTextChanged (fun t ->
-                                                                match tryMakeUri t with
-                                                                | Some u -> pictureUriState.Set (Some u)
-                                                                | None -> pictureUriState.Set None)
-                                                        ]
-                                                        Button.create [
-                                                            Button.content "..."
-                                                            Button.tip "Choose picture"
-                                                            Button.onClick (fun _ ->
-                                                                async {
-                                                                    let! opt = choosePicturePath()
-                                                                    opt |> Option.iter (fun p -> pictureUriState.Set (Some p))
-                                                                } |> Async.StartImmediate)
-                                                        ]
-                                                    ]
-                                                ]
-                                            )
-                                        ]
+            DockPanel.create
+                [ DockPanel.children
+                      [ Grid.create
+                            [ Grid.dock Dock.Top
+                              Grid.margin 4
+                              Grid.columnDefinitions "*"
+                              Grid.rowDefinitions "*, Auto"
+                              Grid.children
+                                  [ ScrollViewer.create
+                                        [ Grid.row 0
+                                          ScrollViewer.content (
+                                              // compute each expander view ahead of time
+                                              let pictureExpander =
+                                                  mkExpander
+                                                      [ Expander.header "Picture"
+                                                        Expander.horizontalAlignment HorizontalAlignment.Stretch
+                                                        Expander.content (
+                                                            StackPanel.create
+                                                                [ StackPanel.orientation Orientation.Horizontal
+                                                                  StackPanel.verticalAlignment VerticalAlignment.Center
+                                                                  StackPanel.spacing 2.0
+                                                                  StackPanel.children
+                                                                      [ Image.create
+                                                                            [ Image.source imgSource
+                                                                              Image.maxHeight 90.0
+                                                                              Image.maxWidth 90.0 ]
+                                                                        TextBox.create
+                                                                            [ TextBox.watermark "Image path"
+                                                                              TextBox.width 300.0
+                                                                              TextBox.height 30.0
+                                                                              TextBox.text (
+                                                                                  pictureUriState.Current
+                                                                                  |> Option.map (fun u ->
+                                                                                      u.OriginalString)
+                                                                                  |> Option.defaultValue ""
+                                                                              )
+                                                                              TextBox.onTextChanged (fun t ->
+                                                                                  match tryMakeUri t with
+                                                                                  | Some u ->
+                                                                                      pictureUriState.Set(Some u)
+                                                                                  | None -> pictureUriState.Set None) ]
+                                                                        Button.create
+                                                                            [ Button.content "..."
+                                                                              Button.tip "Choose picture"
+                                                                              Button.onClick (fun _ ->
+                                                                                  async {
+                                                                                      let! opt = choosePicturePath ()
 
-                                    let basicInfoExpander =
-                                        mkExpander [
-                                            Expander.header "Basic Information"
-                                            Expander.horizontalAlignment HorizontalAlignment.Stretch
-                                            Expander.content (
-                                                StackPanel.create [
-                                                    StackPanel.orientation Orientation.Vertical
-                                                    StackPanel.spacing 2.0
-                                                    StackPanel.children [
-                                                        TextBox.create [
-                                                            TextBox.watermark "Name"
-                                                            TextBox.text nameState.Current
-                                                            TextBox.onTextChanged (fun t -> nameState.Set t)
-                                                        ]
-                                                        TextBox.create [
-                                                            TextBox.watermark "Headline"
-                                                            TextBox.text headlineState.Current
-                                                            TextBox.onTextChanged (fun t -> headlineState.Set t)
-                                                        ]
-                                                        TextBox.create [
-                                                            TextBox.watermark "Email"
-                                                            TextBox.text emailState.Current
-                                                            TextBox.onTextChanged (fun t -> emailState.Set t)
-                                                            if emailState.Current <> "" && not (emailRegex.IsMatch emailState.Current) then
-                                                                TextBox.classes [ "invalid" ]
-                                                        ]
-                                                        TextBox.create [
-                                                            TextBox.watermark "Phone"
-                                                            TextBox.text phoneState.Current
-                                                            TextBox.onTextChanged (fun t -> phoneState.Set t)
-                                                            if phoneState.Current <> "" && not (phoneRegex.IsMatch phoneState.Current) then
-                                                                TextBox.classes [ "invalid" ]
-                                                        ]
-                                                        TextBox.create [
-                                                            TextBox.watermark "Location"
-                                                            TextBox.text locationState.Current
-                                                            TextBox.onTextChanged (fun t -> locationState.Set t)
-                                                        ]
-                                                        TextBlock.create [ TextBlock.text "Links:" ]
-                                                        ListBox.create [ 
-                                                            ListBox.dataItems linksState.Current 
-                                                            ListBox.selectionMode SelectionMode.Single
-                                                            ListBox.selectedItem selectedLinkState.Current
-                                                            ListBox.onSelectedItemChanged (fun item -> selectedLinkState.Set (item |> string))
-                                                            ]
-                                                        Grid.create [
-                                                            Grid.columnDefinitions "*, Auto, Auto"
-                                                            Grid.children [
-                                                                TextBox.create [
-                                                                    Grid.column 0
-                                                                    TextBox.watermark "New link"
-                                                                    TextBox.margin (0, 0, 2, 0)
-                                                                    TextBox.horizontalAlignment HorizontalAlignment.Stretch
-                                                                    TextBox.text newLinkState.Current
-                                                                    TextBox.onTextChanged (fun t -> newLinkState.Set t)
-                                                                    if newLinkState.Current <> "" &&  not(isValidUrl newLinkState.Current) then
-                                                                        TextBox.classes [ "invalid" ]                                                                    
-                                                                ]
-                                                                Button.create [
-                                                                    Grid.column 1
-                                                                    Button.content "Add"
-                                                                    Button.margin (0, 0, 2, 0)
-                                                                    Button.horizontalAlignment HorizontalAlignment.Center
-                                                                    Button.width 70.0
-                                                                    Button.onClick (fun _ ->
-                                                                        if not (String.IsNullOrWhiteSpace newLinkState.Current) 
-                                                                            && isValidUrl newLinkState.Current
-                                                                            && linksState.Current.Contains newLinkState.Current |> not then
-                                                                            linksState.Current.Add newLinkState.Current
-                                                                            newLinkState.Set ""
-                                                                    )
-                                                                ]
-                                                                Button.create [
-                                                                    Grid.column 2
-                                                                    Button.content "Remove"
-                                                                    Button.width 70.0
-                                                                    Button.horizontalAlignment HorizontalAlignment.Center
-                                                                    Button.isEnabled (not(String.IsNullOrEmpty selectedLinkState.Current))
-                                                                    Button.onClick (fun _ ->
-                                                                        if linksState.Current.Contains selectedLinkState.Current then
-                                                                            if linksState.Current.Remove selectedLinkState.Current then
-                                                                                selectedLinkState.Set ""
-                                                                    )
-                                                                ]
-                                                            ]
-                                                        ]
-                                                    ]
-                                                ]
-                                            )
-                                        ]
+                                                                                      opt
+                                                                                      |> Option.iter (fun p ->
+                                                                                          pictureUriState.Set(Some p))
+                                                                                  }
+                                                                                  |> Async.StartImmediate) ] ] ]
+                                                        ) ]
 
-                                    let summaryExpander =
-                                        mkExpander [
-                                            Expander.header "Summary"
-                                            Expander.horizontalAlignment HorizontalAlignment.Stretch
-                                            Expander.content (
-                                                TextBox.create [
-                                                    TextBox.watermark "HTML summary"
-                                                    TextBox.text summaryState.Current
-                                                    TextBox.onTextChanged (fun t -> summaryState.Set t)
-                                                    TextBox.acceptsReturn true
-                                                    TextBox.height 150.0
-                                                    TextBox.verticalScrollBarVisibility ScrollBarVisibility.Auto
-                                                    TextBox.horizontalScrollBarVisibility ScrollBarVisibility.Auto
-                                                ]
-                                            )
-                                        ]
+                                              let basicInfoExpander =
+                                                  mkExpander
+                                                      [ Expander.header "Basic Information"
+                                                        Expander.horizontalAlignment HorizontalAlignment.Stretch
+                                                        Expander.content (
+                                                            StackPanel.create
+                                                                [ StackPanel.orientation Orientation.Vertical
+                                                                  StackPanel.spacing 2.0
+                                                                  StackPanel.children
+                                                                      [ TextBox.create
+                                                                            [ TextBox.watermark "Name"
+                                                                              TextBox.text nameState.Current
+                                                                              TextBox.onTextChanged (fun t ->
+                                                                                  nameState.Set t) ]
+                                                                        TextBox.create
+                                                                            [ TextBox.watermark "Headline"
+                                                                              TextBox.text headlineState.Current
+                                                                              TextBox.onTextChanged (fun t ->
+                                                                                  headlineState.Set t) ]
+                                                                        TextBox.create
+                                                                            [ TextBox.watermark "Email"
+                                                                              TextBox.text emailState.Current
+                                                                              TextBox.onTextChanged (fun t ->
+                                                                                  emailState.Set t)
+                                                                              if
+                                                                                  emailState.Current <> ""
+                                                                                  && not (
+                                                                                      emailRegex.IsMatch
+                                                                                          emailState.Current
+                                                                                  )
+                                                                              then
+                                                                                  TextBox.classes [ "invalid" ] ]
+                                                                        TextBox.create
+                                                                            [ TextBox.watermark "Phone"
+                                                                              TextBox.text phoneState.Current
+                                                                              TextBox.onTextChanged (fun t ->
+                                                                                  phoneState.Set t)
+                                                                              if
+                                                                                  phoneState.Current <> ""
+                                                                                  && not (
+                                                                                      phoneRegex.IsMatch
+                                                                                          phoneState.Current
+                                                                                  )
+                                                                              then
+                                                                                  TextBox.classes [ "invalid" ] ]
+                                                                        TextBox.create
+                                                                            [ TextBox.watermark "Location"
+                                                                              TextBox.text locationState.Current
+                                                                              TextBox.onTextChanged (fun t ->
+                                                                                  locationState.Set t) ]
+                                                                        TextBlock.create [ TextBlock.text "Links:" ]
+                                                                        ListBox.create
+                                                                            [ ListBox.dataItems linksState.Current
+                                                                              ListBox.selectionMode
+                                                                                  SelectionMode.Single
+                                                                              ListBox.selectedItem
+                                                                                  selectedLinkState.Current
+                                                                              ListBox.onSelectedItemChanged
+                                                                                  (fun item ->
+                                                                                      selectedLinkState.Set(
+                                                                                          item |> string
+                                                                                      )) ]
+                                                                        Grid.create
+                                                                            [ Grid.columnDefinitions "*, Auto, Auto"
+                                                                              Grid.children
+                                                                                  [ TextBox.create
+                                                                                        [ Grid.column 0
+                                                                                          TextBox.watermark "New link"
+                                                                                          TextBox.margin (0, 0, 2, 0)
+                                                                                          TextBox.horizontalAlignment
+                                                                                              HorizontalAlignment.Stretch
+                                                                                          TextBox.text
+                                                                                              newLinkState.Current
+                                                                                          TextBox.onTextChanged
+                                                                                              (fun t ->
+                                                                                                  newLinkState.Set t)
+                                                                                          if
+                                                                                              newLinkState.Current
+                                                                                              <> ""
+                                                                                              && not (
+                                                                                                  isValidUrl
+                                                                                                      newLinkState.Current
+                                                                                              )
+                                                                                          then
+                                                                                              TextBox.classes
+                                                                                                  [ "invalid" ] ]
+                                                                                    Button.create
+                                                                                        [ Grid.column 1
+                                                                                          Button.content "Add"
+                                                                                          Button.margin (0, 0, 2, 0)
+                                                                                          Button.horizontalAlignment
+                                                                                              HorizontalAlignment.Center
+                                                                                          Button.width 70.0
+                                                                                          Button.onClick (fun _ ->
+                                                                                              if
+                                                                                                  not (
+                                                                                                      String.IsNullOrWhiteSpace
+                                                                                                          newLinkState.Current
+                                                                                                  )
+                                                                                                  && isValidUrl
+                                                                                                      newLinkState.Current
+                                                                                                  && linksState.Current.Contains
+                                                                                                      newLinkState.Current
+                                                                                                     |> not
+                                                                                              then
+                                                                                                  linksState.Current.Add
+                                                                                                      newLinkState.Current
 
-                                    let childrenList : IView list = [
-                                        pictureExpander :> IView
-                                        basicInfoExpander :> IView
-                                        summaryExpander :> IView
-                                    ]
+                                                                                                  newLinkState.Set "") ]
+                                                                                    Button.create
+                                                                                        [ Grid.column 2
+                                                                                          Button.content "Remove"
+                                                                                          Button.width 70.0
+                                                                                          Button.horizontalAlignment
+                                                                                              HorizontalAlignment.Center
+                                                                                          Button.isEnabled (
+                                                                                              not (
+                                                                                                  String.IsNullOrEmpty
+                                                                                                      selectedLinkState.Current
+                                                                                              )
+                                                                                          )
+                                                                                          Button.onClick (fun _ ->
+                                                                                              if
+                                                                                                  linksState.Current.Contains
+                                                                                                      selectedLinkState.Current
+                                                                                              then
+                                                                                                  if
+                                                                                                      linksState.Current.Remove
+                                                                                                          selectedLinkState.Current
+                                                                                                  then
+                                                                                                      selectedLinkState.Set
+                                                                                                          "") ] ] ] ] ]
+                                                        ) ]
 
-                                    StackPanel.create [
-                                        StackPanel.orientation Orientation.Vertical
-                                        StackPanel.children childrenList
-                                    ]
-                                    )
-                                ]   // end ScrollViewer.create
-        
-                            // bottom controls
-                            StackPanel.create [
-                                Grid.row 1
-                                StackPanel.orientation Orientation.Horizontal
-                                StackPanel.horizontalAlignment HorizontalAlignment.Right
-                                StackPanel.verticalAlignment VerticalAlignment.Bottom
-                                StackPanel.children [                                 
-                                    Button.create [
-                                        Button.content "Load from XML"
-                                        Button.onClick (fun _ -> loadFromXml())
-                                    ]
-                                    SplitButton.create [
-                                        SplitButton.content "Save As"
-                                        SplitButton.flyout (
-                                            MenuFlyout.create [
-                                                MenuFlyout.placement PlacementMode.BottomEdgeAlignedRight
-                                                MenuFlyout.dataItems [ Xml; Html; Pdf ]
-                                                MenuFlyout.itemTemplate (
-                                                    DataTemplateView<_>.create (fun (format: GenerateToFormat) -> 
-                                                        MenuItem.create [
-                                                            MenuItem.width 60.0
-                                                            MenuItem.height 20.0
-                                                            MenuItem.padding (Thickness(2.0))
-                                                            MenuItem.margin (Thickness(0.0))
-                                                            MenuItem.header (match format with Xml -> "XML" | Html -> "HTML" | Pdf -> "PDF")
-                                                            MenuItem.onClick (fun _ ->
-                                                                async {
-                                                                    let! filePathOpt = chooseFile format
-                                                                    match filePathOpt with
-                                                                    | Some uri -> generateResume(format, HttpUtility.UrlDecode uri.LocalPath)
-                                                                    | None -> ()
-                                                                } |> Async.StartImmediate)
-                                                        ]
-                                                    )
-                                                )
-                                            ]
-                                        )]
-                                ]
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        )
+                                              let summaryExpander =
+                                                  mkExpander
+                                                      [ Expander.header "Summary"
+                                                        Expander.horizontalAlignment HorizontalAlignment.Stretch
+                                                        Expander.content (
+                                                            TextBox.create
+                                                                [ TextBox.watermark "HTML summary"
+                                                                  TextBox.text summaryState.Current
+                                                                  TextBox.onTextChanged (fun t -> summaryState.Set t)
+                                                                  TextBox.acceptsReturn true
+                                                                  TextBox.height 150.0
+                                                                  TextBox.verticalScrollBarVisibility
+                                                                      ScrollBarVisibility.Auto
+                                                                  TextBox.horizontalScrollBarVisibility
+                                                                      ScrollBarVisibility.Auto ]
+                                                        ) ]
+
+                                              let childrenList: IView list =
+                                                  [ pictureExpander :> IView
+                                                    basicInfoExpander :> IView
+                                                    summaryExpander :> IView ]
+
+                                              StackPanel.create
+                                                  [ StackPanel.orientation Orientation.Vertical
+                                                    StackPanel.children childrenList ]
+                                          ) ] // end ScrollViewer.create
+
+                                    // bottom controls
+                                    StackPanel.create
+                                        [ Grid.row 1
+                                          StackPanel.orientation Orientation.Horizontal
+                                          StackPanel.horizontalAlignment HorizontalAlignment.Right
+                                          StackPanel.verticalAlignment VerticalAlignment.Bottom
+                                          StackPanel.children
+                                              [ Button.create
+                                                    [ Button.content "Load from XML"
+                                                      Button.onClick (fun _ -> loadFromXml ()) ]
+                                                SplitButton.create
+                                                    [ SplitButton.content "Save As"
+                                                      SplitButton.flyout (
+                                                          MenuFlyout.create
+                                                              [ MenuFlyout.placement
+                                                                    PlacementMode.BottomEdgeAlignedRight
+                                                                MenuFlyout.dataItems [ Xml; Html; Pdf ]
+                                                                MenuFlyout.itemTemplate (
+                                                                    DataTemplateView<_>.create
+                                                                        (fun (format: GenerateToFormat) ->
+                                                                            MenuItem.create
+                                                                                [ MenuItem.width 60.0
+                                                                                  MenuItem.height 20.0
+                                                                                  MenuItem.padding (Thickness(2.0))
+                                                                                  MenuItem.margin (Thickness(0.0))
+                                                                                  MenuItem.header (
+                                                                                      match format with
+                                                                                      | Xml -> "XML"
+                                                                                      | Html -> "HTML"
+                                                                                      | Pdf -> "PDF"
+                                                                                  )
+                                                                                  MenuItem.onClick (fun _ ->
+                                                                                      async {
+                                                                                          let! filePathOpt =
+                                                                                              chooseFile format
+
+                                                                                          match filePathOpt with
+                                                                                          | Some uri ->
+                                                                                              generateResume (
+                                                                                                  format,
+                                                                                                  HttpUtility.UrlDecode
+                                                                                                      uri.LocalPath
+                                                                                              )
+                                                                                          | None -> ()
+                                                                                      }
+                                                                                      |> Async.StartImmediate) ])
+                                                                ) ]
+                                                      ) ] ] ] ] ] ] ])
 
 
 type MainWindow() as this =
     inherit HostWindow()
 
     do
-        let invalidTextBoxStyle = 
-            let style =Style(fun x -> x.OfType<TextBox>().Class "invalid")
+        let invalidTextBoxStyle =
+            let style = Style(fun x -> x.OfType<TextBox>().Class "invalid")
             style.Setters.Add(Setter(TextBox.BorderBrushProperty, Brushes.Red))
             style :> IStyle
-        
+
         base.Title <- "Resume Generator"
         base.Width <- 800.0
         base.Height <- 500.0
@@ -551,7 +697,4 @@ type App() =
         | _ -> ()
 
 let app =
-    AppBuilder
-        .Configure<App>()
-        .UsePlatformDetect()
-        .StartWithClassicDesktopLifetime([||])
+    AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime([||])

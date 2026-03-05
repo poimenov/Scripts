@@ -118,40 +118,44 @@ let chooseFile (format: GenerateToFormat) =
         if isNull win then
             return None
         else
-            let options = FilePickerSaveOptions()
-            options.Title <- sprintf "Save resume as a %A file" format
-            options.ShowOverwritePrompt <- true
+            let saveOptions =
+                let options = FilePickerSaveOptions()
+                options.Title <- sprintf "Save resume as a %A file" format
+                options.ShowOverwritePrompt <- true
 
-            options.DefaultExtension <-
-                match format with
-                | GenerateToFormat.Xml -> "xml"
-                | GenerateToFormat.Html -> "html"
-                | GenerateToFormat.Pdf -> "pdf"
+                options.DefaultExtension <-
+                    match format with
+                    | GenerateToFormat.Xml -> "xml"
+                    | GenerateToFormat.Html -> "html"
+                    | GenerateToFormat.Pdf -> "pdf"
 
-            options.SuggestedFileName <- sprintf "resume.%s" options.DefaultExtension
+                options.SuggestedFileName <- sprintf "resume.%s" options.DefaultExtension
 
-            let fileType =
-                match format with
-                | GenerateToFormat.Xml ->
-                    FilePickerFileType("XML")
-                    |> fun x ->
-                        x.Patterns <- [| "*.xml" |]
-                        x
-                | GenerateToFormat.Html ->
-                    FilePickerFileType("HTML")
-                    |> fun x ->
-                        x.Patterns <- [| "*.html" |]
-                        x
-                | GenerateToFormat.Pdf ->
-                    FilePickerFileType("PDF")
-                    |> fun x ->
-                        x.Patterns <- [| "*.pdf" |]
-                        x
+                let fileType =
+                    match format with
+                    | GenerateToFormat.Xml ->
+                        FilePickerFileType "XML"
+                        |> fun x ->
+                            x.Patterns <- [| "*.xml" |]
+                            x
+                    | GenerateToFormat.Html ->
+                        FilePickerFileType "HTML"
+                        |> fun x ->
+                            x.Patterns <- [| "*.html" |]
+                            x
+                    | GenerateToFormat.Pdf ->
+                        FilePickerFileType "PDF"
+                        |> fun x ->
+                            x.Patterns <- [| "*.pdf" |]
+                            x
 
-            options.SuggestedFileType <- fileType
+                options.SuggestedFileType <- fileType
+                options
 
-            let! file = win.StorageProvider.SaveFilePickerAsync options |> Async.AwaitTask
-            return if isNull file then None else Some file.Path.LocalPath
+            let! file = win.StorageProvider.SaveFilePickerAsync saveOptions |> Async.AwaitTask
+            return Some file
+    // let! file = win.StorageProvider.SaveFilePickerAsync saveOptions |> Async.AwaitTask
+    // return if isNull file then None else Some file.Path.LocalPath
     }
 
 let chooseXmlPath () =
@@ -679,6 +683,21 @@ type Views =
                         | GenerateToFormat.Pdf ->
                             let html = transformXmlToHtml xml
                             do! generatePdfFromHtml (html, filePath) |> Async.AwaitTask
+                }
+                |> Async.StartImmediate
+
+            let startGenerateResume (format: GenerateToFormat) =
+                async {
+                    let! fileOpt = chooseFile format
+
+                    match fileOpt with
+                    | None -> ()
+                    | Some file ->
+                        if not (isNull file) then
+                            let path = file.Path.LocalPath
+                            file.Dispose()
+                            generateResume (format, path)
+
                 }
                 |> Async.StartImmediate
 
@@ -2298,42 +2317,25 @@ type Views =
                                               [ Button.create
                                                     [ Button.content "Load from XML"
                                                       Button.onClick (fun _ -> loadFromXml states) ]
-                                                SplitButton.create
-                                                    [ SplitButton.content "Save As"
-                                                      SplitButton.flyout (
+                                                DropDownButton.create
+                                                    [ DropDownButton.content "Save As"
+                                                      DropDownButton.flyout (
                                                           MenuFlyout.create
                                                               [ MenuFlyout.placement
                                                                     PlacementMode.BottomEdgeAlignedRight
-                                                                MenuFlyout.dataItems [ Xml; Html; Pdf ]
-                                                                MenuFlyout.itemTemplate (
-                                                                    DataTemplateView<_>.create
-                                                                        (fun (format: GenerateToFormat) ->
-                                                                            MenuItem.create
-                                                                                [ MenuItem.width 60.0
-                                                                                  MenuItem.height 20.0
-                                                                                  MenuItem.padding (Thickness(2.0))
-                                                                                  MenuItem.margin (Thickness(0.0))
-                                                                                  MenuItem.header (
-                                                                                      match format with
-                                                                                      | Xml -> "XML"
-                                                                                      | Html -> "HTML"
-                                                                                      | Pdf -> "PDF"
-                                                                                  )
-                                                                                  MenuItem.onClick (fun _ ->
-                                                                                      async {
-                                                                                          let! filePathOpt =
-                                                                                              chooseFile format
-
-                                                                                          match filePathOpt with
-                                                                                          | Some path ->
-                                                                                              generateResume (
-                                                                                                  format,
-                                                                                                  path
-                                                                                              )
-                                                                                          | None -> ()
-                                                                                      }
-                                                                                      |> Async.StartImmediate) ])
-                                                                ) ]
+                                                                MenuFlyout.viewItems
+                                                                    [ MenuItem.create
+                                                                          [ MenuItem.header "XML"
+                                                                            MenuItem.onClick (fun _ ->
+                                                                                startGenerateResume Xml) ]
+                                                                      MenuItem.create
+                                                                          [ MenuItem.header "HTML"
+                                                                            MenuItem.onClick (fun _ ->
+                                                                                startGenerateResume Html) ]
+                                                                      MenuItem.create
+                                                                          [ MenuItem.header "PDF"
+                                                                            MenuItem.onClick (fun _ ->
+                                                                                startGenerateResume Pdf) ] ] ]
                                                       ) ] ] ] ] ] ] ])
 
 

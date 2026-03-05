@@ -20,13 +20,10 @@
                     }
 
                     body {
-                        font-family: 'Roboto Condensed', sans-serif;
+                        font-family: 'Roboto Condensed', Helvetica Condensed;
                         background: #f3f4f6;
                         min-height: 100vh;
-                        padding: 40px 20px;
-                        /*display: flex;*/
-                        justify-content: center;
-                        align-items: center;
+                        padding: 20px;
                         font-size:14px;
                         line-height: 1.3;
                         color: #1f2937;
@@ -61,24 +58,19 @@
                         display: flex;
                         align-items: center;
                         padding: 12px;
-                        gap: 32px;
                     }
 
                     .profile-picture {
-                        width: 120px;
+                        width: var(--sidebar-width);
                         height: 120px;
-                        border-radius: 12px;
-                        overflow: hidden;
-                        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-                        border: 3px solid white;
-                        background: #e2e8f0;
-                        flex-shrink: 0;
+			            text-align: center;
                     }
 
                     .profile-picture img {
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
+                        width: 120px;
+                        height: 120px;
+                        border-radius: 12px;
+                        border: 1px solid white;			
                     }
 
                     .profile-info {
@@ -100,7 +92,7 @@
                     /* Contact bar */
                     .contact-bar {
                         background: white;
-                        padding: 16px 24px;
+                        padding: 16px;
                         border-bottom: 1px solid #e5e7eb;
                     }
 
@@ -155,8 +147,8 @@
                         color: var(--primary-color);
                         font-size: 18px;
                         font-weight: 600;
-                        margin-bottom: 12px;
-                        padding-bottom: 4px;
+                        margin-bottom: 10px;
+                        padding-bottom: 2px;
                         border-bottom: 2px solid var(--primary-color);
                         text-transform: uppercase;
                         letter-spacing: 0.5px;
@@ -186,6 +178,10 @@
                         display: flex;
                         flex-direction: column;
                         gap: 12px;
+                    }
+
+                    .section-item {
+                        padding-bottom: 4px;
                     }
 
                     .section-content p {
@@ -227,6 +223,7 @@
                         display: flex;
                         gap: 6px;
                         margin-top: 4px;
+                        margin-bottom: 12px;
                     }
 
                     .level-dot {
@@ -326,7 +323,7 @@
                     }
 
                     .mt-2 {
-                        margin-top: 8px;
+                        margin-top: 2px;
                     }
 
                     .mb-2 {
@@ -373,7 +370,7 @@
                     <div class="profile-picture">
                         <xsl:choose>
                             <xsl:when test="picturePath != '' and picturePath != 'data:,'">
-                                <img style="width:120px;height:120px;" src="{picturePath}" alt="Profile picture"/>
+                                <img src="{picturePath}" alt="Profile picture"/>
                             </xsl:when>
                             <xsl:otherwise>
                                 <svg viewBox="0 0 24 24" fill="currentColor">

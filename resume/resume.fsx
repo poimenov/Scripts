@@ -359,7 +359,8 @@ let generatePdfFromHtml (htmlContent: string, outputPath: string) =
             PdfOptions(
                 Format = PaperFormat.A4,
                 DisplayHeaderFooter = false,
-                MarginOptions = new MarginOptions(Top = "5mm", Bottom = "5mm", Left = "5mm", Right = "5mm")
+                PrintBackground = true,
+                MarginOptions = new MarginOptions(Top = "0mm", Bottom = "0mm", Left = "0mm", Right = "0mm")
             )
 
         do! page.PdfAsync(outputPath, pdfOptions)

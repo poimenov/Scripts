@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:ext="urn:ExtObj">
     <xsl:output method="html" indent="yes" encoding="UTF-8"/>
     
     <xsl:template match="/">
@@ -119,7 +119,7 @@
             <xsl:if test="summary">
                 <h3>Summary</h3>
                 <div>
-                    <xsl:value-of select="summary" disable-output-escaping="yes"/>
+                    <xsl:value-of select="ext:ConvertToHtml(summary)" disable-output-escaping="yes"/>
                 </div>
             </xsl:if>            
             
@@ -236,7 +236,7 @@
             </xsl:if>   
             <xsl:if test="description != ''">
                 <div>
-                    <xsl:value-of select="description" disable-output-escaping="yes"/>
+                    <xsl:value-of select="ext:ConvertToHtml(description)" disable-output-escaping="yes"/>
                 </div>
             </xsl:if>                     
         </div>

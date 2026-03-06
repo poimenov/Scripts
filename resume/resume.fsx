@@ -3,6 +3,7 @@
 #r "nuget: Avalonia.Themes.Fluent"
 #r "nuget: Avalonia.FuncUI"
 #r "nuget: PuppeteerSharp"
+#r "nuget: Markdig"
 
 open System
 open System.Collections.ObjectModel
@@ -13,26 +14,33 @@ open System.Xml.Xsl
 open System.Web
 open Avalonia
 open Avalonia.Controls
+open Avalonia.Controls.Primitives
 open Avalonia.FuncUI
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Hosts
 open Avalonia.Layout
+open Avalonia.Media
 open Avalonia.Media.Imaging
 open Avalonia.Platform.Storage
+open Avalonia.Styling
 open PuppeteerSharp
 open PuppeteerSharp.Media
-open Avalonia.Controls.Primitives
-open Avalonia.Styling
-open Avalonia.Media
+open Markdig
 
 type GenerateToFormat =
     | Pdf
     | Xml
     | Html
 
-type XsltFile (name: string, path: string) =
+type XsltFile(name: string, path: string) =
     member val Name = name with get, set
     member val Path = path with get, set
+
+type MdTransform() =
+    member _.ConvertToHtml(text: string) =
+        let pipeline = MarkdownPipelineBuilder().UseAdvancedExtensions().Build()
+        Markdown.ToHtml(text, pipeline)
+
 
 [<Serializable>]
 type Education
@@ -155,15 +163,17 @@ let chooseFile (format: GenerateToFormat) =
 
                 options.SuggestedFileType <- fileType
                 options
-            
+
             use! file = win.StorageProvider.SaveFilePickerAsync saveOptions |> Async.AwaitTask
             return if isNull file then None else Some file.Path.LocalPath
     }
 
 let getXsltFiles =
     let folder = Path.Combine(__SOURCE_DIRECTORY__, "xslt") |> DirectoryInfo
-    if folder.Exists then  
-        folder.GetFiles "*.xslt" |> Array.map(fun f -> XsltFile(Path.GetFileNameWithoutExtension f.Name, f.FullName))
+
+    if folder.Exists then
+        folder.GetFiles "*.xslt"
+        |> Array.map (fun f -> XsltFile(Path.GetFileNameWithoutExtension f.Name, f.FullName))
     else
         Array.empty
 
@@ -351,13 +361,14 @@ let getXmlDoc
 
     doc
 
-let transformXmlToHtml (doc: XDocument, xsltPath:string) =
-    //let xsltPath = Path.Combine(__SOURCE_DIRECTORY__, "xslt", "default.xslt")
+let transformXmlToHtml (doc: XDocument, xsltPath: string) =
+    let args = new XsltArgumentList()
+    args.AddExtensionObject("urn:ExtObj", new MdTransform())
     let xslt = new XslCompiledTransform()
     xslt.Load xsltPath
     use stringWriter = new StringWriter()
     use docReader = doc.CreateReader()
-    xslt.Transform(docReader, null, stringWriter)
+    xslt.Transform(docReader, args, stringWriter)
     stringWriter.ToString()
 
 let generatePdfFromHtml (htmlContent: string, outputPath: string) =
@@ -413,7 +424,7 @@ let loadFromXml (states: LoadStates) =
                 if not (String.IsNullOrWhiteSpace pic) then
                     states.pictureUriState.Set(tryMakeUri pic)
                 else
-                    states.pictureUriState.Set(None)
+                    states.pictureUriState.Set None
 
                 // basic info
                 states.nameState.Set(get "name")
@@ -487,7 +498,7 @@ let loadFromXml (states: LoadStates) =
 
                         let level =
                             langNode.Element(XName.Get "level")
-                            |> fun e -> if isNull e then 0 else Int32.Parse(e.Value)
+                            |> fun e -> if isNull e then 0 else Int32.Parse e.Value
 
                         states.languagesState.Current.Add(Language(name, fluency, level))
 
@@ -587,7 +598,7 @@ type Views =
             // states
             let pictureUriState: IWritable<Uri option> = ctx.useState None
             let selectedXsltState: IWritable<XsltFile option> = ctx.useState None
-            let xsltFilesState : IWritable<XsltFile array> = ctx.useState Array.empty
+            let xsltFilesState: IWritable<XsltFile array> = ctx.useState Array.empty
             let selectedXsltIndexState = ctx.useState -1
             let nameState = ctx.useState ""
             let headlineState = ctx.useState ""
@@ -639,15 +650,16 @@ type Views =
             let selectedEduIndexState = ctx.useState -1
 
             ctx.useEffect (
-                handler = 
+                handler =
                     (fun _ ->
                         xsltFilesState.Set getXsltFiles
-                        if xsltFilesState.Current.Length > 0 
-                        then 
+
+                        if xsltFilesState.Current.Length > 0 then
                             let defaultXslt = xsltFilesState.Current |> Array.head
                             selectedXsltIndexState.Set 0
-                            selectedXsltState.Set (Some defaultXslt)
-                ), triggers = [ EffectTrigger.AfterInit ])
+                            selectedXsltState.Set(Some defaultXslt)),
+                triggers = [ EffectTrigger.AfterInit ]
+            )
 
 
             let imgSource =
@@ -712,22 +724,23 @@ type Views =
                             | Some xsltPath ->
                                 let html = transformXmlToHtml (xml, xsltPath)
                                 do! generatePdfFromHtml (html, outputFilePath) |> Async.AwaitTask
-                            | None -> ()                        
+                            | None -> ()
                 }
                 |> Async.StartImmediate
 
             let startGenerateResume (format: GenerateToFormat) =
                 async {
                     let! file = chooseFile format
+
                     match file with
                     | None -> ()
-                    | Some outputPath -> 
+                    | Some outputPath ->
                         match format with
                         | Xml -> generateResume (format, outputPath, None)
                         | _ ->
                             match selectedXsltState.Current with
                             | Some xsltFile -> generateResume (format, outputPath, Some xsltFile.Path)
-                            | None ->()
+                            | None -> ()
                 }
                 |> Async.StartImmediate
 
@@ -981,7 +994,7 @@ type Views =
                                                                     HorizontalAlignment.Stretch
                                                                 Expander.content (
                                                                     TextBox.create
-                                                                        [ TextBox.watermark "HTML summary"
+                                                                        [ TextBox.watermark "Summary (markdown)"
                                                                           TextBox.text summaryState.Current
                                                                           TextBox.onTextChanged (fun t ->
                                                                               summaryState.Set t)
@@ -1020,35 +1033,24 @@ type Views =
 
                                                                                                   selectedExpIndexState
                                                                                                       .Set(
-                                                                                                          experiencesState
-                                                                                                              .Current
-                                                                                                              .IndexOf(
-                                                                                                                  exp
-                                                                                                              )
+                                                                                                          experiencesState.Current.IndexOf
+                                                                                                              exp
                                                                                                       )
 
-                                                                                                  newExpCompanyState
-                                                                                                      .Set(
-                                                                                                          exp.Company
-                                                                                                      )
+                                                                                                  newExpCompanyState.Set
+                                                                                                      exp.Company
 
-                                                                                                  newExpPositionState
-                                                                                                      .Set(
-                                                                                                          exp.Position
-                                                                                                      )
+                                                                                                  newExpPositionState.Set
+                                                                                                      exp.Position
 
-                                                                                                  newExpLocationState
-                                                                                                      .Set(
-                                                                                                          exp.Location
-                                                                                                      )
+                                                                                                  newExpLocationState.Set
+                                                                                                      exp.Location
 
-                                                                                                  newExpPeriodState
-                                                                                                      .Set(exp.Period)
+                                                                                                  newExpPeriodState.Set
+                                                                                                      exp.Period
 
-                                                                                                  newExpDescriptionState
-                                                                                                      .Set(
-                                                                                                          exp.Description
-                                                                                                      )
+                                                                                                  newExpDescriptionState.Set
+                                                                                                      exp.Description
 
                                                                                                   newExpWebsiteState
                                                                                                       .Set(
@@ -1061,26 +1063,26 @@ type Views =
                                                                                                               ""
                                                                                                       )
                                                                                               else
-                                                                                                  selectedExpIndexState
-                                                                                                      .Set(-1)
+                                                                                                  selectedExpIndexState.Set
+                                                                                                      -1
 
-                                                                                                  newExpCompanyState
-                                                                                                      .Set("")
+                                                                                                  newExpCompanyState.Set
+                                                                                                      ""
 
-                                                                                                  newExpPositionState
-                                                                                                      .Set("")
+                                                                                                  newExpPositionState.Set
+                                                                                                      ""
 
-                                                                                                  newExpLocationState
-                                                                                                      .Set("")
+                                                                                                  newExpLocationState.Set
+                                                                                                      ""
 
-                                                                                                  newExpPeriodState
-                                                                                                      .Set("")
+                                                                                                  newExpPeriodState.Set
+                                                                                                      ""
 
-                                                                                                  newExpDescriptionState
-                                                                                                      .Set("")
+                                                                                                  newExpDescriptionState.Set
+                                                                                                      ""
 
-                                                                                                  newExpWebsiteState
-                                                                                                      .Set(""))
+                                                                                                  newExpWebsiteState.Set
+                                                                                                      "")
                                                                                       ListBox.itemTemplate (
                                                                                           DataTemplateView<_>.create
                                                                                               (fun (exp: Experience) ->
@@ -1132,7 +1134,8 @@ type Views =
                                                                                       then
                                                                                           TextBox.classes [ "invalid" ] ]
                                                                                 TextBox.create
-                                                                                    [ TextBox.watermark "Description"
+                                                                                    [ TextBox.watermark
+                                                                                          "Description (markdown)"
                                                                                       TextBox.text
                                                                                           newExpDescriptionState.Current
                                                                                       TextBox.onTextChanged (fun t ->
@@ -1185,35 +1188,23 @@ type Views =
                                                                                                                       exp
                                                                                                                   )
 
-                                                                                                              newExpCompanyState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpCompanyState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpPositionState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpPositionState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpLocationState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpLocationState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpPeriodState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpPeriodState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpDescriptionState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpDescriptionState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpWebsiteState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ]
+                                                                                                              newExpWebsiteState.Set
+                                                                                                                  "") ]
                                                                                             Button.create
                                                                                                 [ Button.content
                                                                                                       "Update"
@@ -1273,46 +1264,29 @@ type Views =
                                                                                                               selectedExpIndexState.Current
                                                                                                               >= 0
                                                                                                           then
-                                                                                                              experiencesState
-                                                                                                                  .Current
-                                                                                                                  .RemoveAt(
-                                                                                                                      selectedExpIndexState.Current
-                                                                                                                  )
+                                                                                                              experiencesState.Current.RemoveAt
+                                                                                                                  selectedExpIndexState.Current
 
-                                                                                                              selectedExpIndexState
-                                                                                                                  .Set(
-                                                                                                                      -1
-                                                                                                                  )
+                                                                                                              selectedExpIndexState.Set
+                                                                                                                  -1
 
-                                                                                                              newExpCompanyState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpCompanyState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpPositionState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpPositionState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpLocationState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpLocationState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpPeriodState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpPeriodState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpDescriptionState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newExpDescriptionState.Set
+                                                                                                                  ""
 
-                                                                                                              newExpWebsiteState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ] ] ] ] ]
+                                                                                                              newExpWebsiteState.Set
+                                                                                                                  "") ] ] ] ] ]
                                                                 ) ]
 
                                                           // Languages Expander
@@ -1342,37 +1316,30 @@ type Views =
 
                                                                                                   selectedLangIndexState
                                                                                                       .Set(
-                                                                                                          languagesState
-                                                                                                              .Current
-                                                                                                              .IndexOf(
-                                                                                                                  lang
-                                                                                                              )
+                                                                                                          languagesState.Current.IndexOf
+                                                                                                              lang
                                                                                                       )
 
-                                                                                                  newLangNameState.Set(
+                                                                                                  newLangNameState.Set
                                                                                                       lang.Name
-                                                                                                  )
 
-                                                                                                  newLangFluencyState
-                                                                                                      .Set(
-                                                                                                          lang.Fluency
-                                                                                                      )
+                                                                                                  newLangFluencyState.Set
+                                                                                                      lang.Fluency
 
-                                                                                                  newLangLevelState
-                                                                                                      .Set(lang.Level)
+                                                                                                  newLangLevelState.Set
+                                                                                                      lang.Level
                                                                                               else
-                                                                                                  selectedLangIndexState
-                                                                                                      .Set(-1)
+                                                                                                  selectedLangIndexState.Set
+                                                                                                      -1
 
-                                                                                                  newLangNameState.Set(
+                                                                                                  newLangNameState.Set
                                                                                                       ""
-                                                                                                  )
 
-                                                                                                  newLangFluencyState
-                                                                                                      .Set("")
+                                                                                                  newLangFluencyState.Set
+                                                                                                      ""
 
-                                                                                                  newLangLevelState
-                                                                                                      .Set(0))
+                                                                                                  newLangLevelState.Set
+                                                                                                      0)
                                                                                       ListBox.itemTemplate (
                                                                                           DataTemplateView<_>.create
                                                                                               (fun (lang: Language) ->
@@ -1451,26 +1418,17 @@ type Views =
                                                                                                                       newLangLevelState.Current
                                                                                                                   )
 
-                                                                                                              languagesState
-                                                                                                                  .Current
-                                                                                                                  .Add(
-                                                                                                                      lang
-                                                                                                                  )
+                                                                                                              languagesState.Current.Add
+                                                                                                                  lang
 
-                                                                                                              newLangNameState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newLangNameState.Set
+                                                                                                                  ""
 
-                                                                                                              newLangFluencyState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newLangFluencyState.Set
+                                                                                                                  ""
 
-                                                                                                              newLangLevelState
-                                                                                                                  .Set(
-                                                                                                                      0
-                                                                                                                  )) ]
+                                                                                                              newLangLevelState.Set
+                                                                                                                  0) ]
                                                                                             Button.create
                                                                                                 [ Button.content
                                                                                                       "Update"
@@ -1514,31 +1472,20 @@ type Views =
                                                                                                               selectedLangIndexState.Current
                                                                                                               >= 0
                                                                                                           then
-                                                                                                              languagesState
-                                                                                                                  .Current
-                                                                                                                  .RemoveAt(
-                                                                                                                      selectedLangIndexState.Current
-                                                                                                                  )
+                                                                                                              languagesState.Current.RemoveAt
+                                                                                                                  selectedLangIndexState.Current
 
-                                                                                                              selectedLangIndexState
-                                                                                                                  .Set(
-                                                                                                                      -1
-                                                                                                                  )
+                                                                                                              selectedLangIndexState.Set
+                                                                                                                  -1
 
-                                                                                                              newLangNameState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newLangNameState.Set
+                                                                                                                  ""
 
-                                                                                                              newLangFluencyState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newLangFluencyState.Set
+                                                                                                                  ""
 
-                                                                                                              newLangLevelState
-                                                                                                                  .Set(
-                                                                                                                      0
-                                                                                                                  )) ] ] ] ] ]
+                                                                                                              newLangLevelState.Set
+                                                                                                                  0) ] ] ] ] ]
                                                                 ) ]
 
                                                           // Skills Expander
@@ -1568,15 +1515,12 @@ type Views =
 
                                                                                                   selectedSkillIndexState
                                                                                                       .Set(
-                                                                                                          skillsState
-                                                                                                              .Current
-                                                                                                              .IndexOf(
-                                                                                                                  skill
-                                                                                                              )
+                                                                                                          skillsState.Current.IndexOf
+                                                                                                              skill
                                                                                                       )
 
-                                                                                                  newSkillNameState
-                                                                                                      .Set(skill.Name)
+                                                                                                  newSkillNameState.Set
+                                                                                                      skill.Name
 
                                                                                                   newSkillKeywordsState
                                                                                                       .Set(
@@ -1586,14 +1530,14 @@ type Views =
                                                                                                           )
                                                                                                       )
                                                                                               else
-                                                                                                  selectedSkillIndexState
-                                                                                                      .Set(-1)
+                                                                                                  selectedSkillIndexState.Set
+                                                                                                      -1
 
-                                                                                                  newSkillNameState
-                                                                                                      .Set("")
+                                                                                                  newSkillNameState.Set
+                                                                                                      ""
 
-                                                                                                  newSkillKeywordsState
-                                                                                                      .Set(""))
+                                                                                                  newSkillKeywordsState.Set
+                                                                                                      "")
                                                                                       ListBox.itemTemplate (
                                                                                           DataTemplateView<_>.create
                                                                                               (fun (skill: Skill) ->
@@ -1656,15 +1600,11 @@ type Views =
                                                                                                               skillsState.Current.Add
                                                                                                                   skill
 
-                                                                                                              newSkillNameState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newSkillNameState.Set
+                                                                                                                  ""
 
-                                                                                                              newSkillKeywordsState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ]
+                                                                                                              newSkillKeywordsState.Set
+                                                                                                                  "") ]
                                                                                             Button.create
                                                                                                 [ Button.content
                                                                                                       "Update"
@@ -1721,20 +1661,14 @@ type Views =
                                                                                                               skillsState.Current.RemoveAt
                                                                                                                   selectedSkillIndexState.Current
 
-                                                                                                              selectedSkillIndexState
-                                                                                                                  .Set(
-                                                                                                                      -1
-                                                                                                                  )
+                                                                                                              selectedSkillIndexState.Set
+                                                                                                                  -1
 
-                                                                                                              newSkillNameState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newSkillNameState.Set
+                                                                                                                  ""
 
-                                                                                                              newSkillKeywordsState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ] ] ] ] ]
+                                                                                                              newSkillKeywordsState.Set
+                                                                                                                  "") ] ] ] ] ]
                                                                 ) ]
 
                                                           // Certifications Expander
@@ -1764,27 +1698,21 @@ type Views =
 
                                                                                                   selectedCertIndexState
                                                                                                       .Set(
-                                                                                                          certificationsState
-                                                                                                              .Current
-                                                                                                              .IndexOf(
-                                                                                                                  cert
-                                                                                                              )
+                                                                                                          certificationsState.Current.IndexOf
+                                                                                                              cert
                                                                                                       )
 
-                                                                                                  newCertTitleState
-                                                                                                      .Set(cert.Title)
+                                                                                                  newCertTitleState.Set
+                                                                                                      cert.Title
 
-                                                                                                  newCertIssuerState
-                                                                                                      .Set(
-                                                                                                          cert.Issuer
-                                                                                                      )
+                                                                                                  newCertIssuerState.Set
+                                                                                                      cert.Issuer
 
-                                                                                                  newCertDateState.Set(
+                                                                                                  newCertDateState.Set
                                                                                                       cert.Date
-                                                                                                  )
 
-                                                                                                  newCertLabelState
-                                                                                                      .Set(cert.Label)
+                                                                                                  newCertLabelState.Set
+                                                                                                      cert.Label
 
                                                                                                   newCertWebsiteState
                                                                                                       .Set(
@@ -1797,24 +1725,23 @@ type Views =
                                                                                                               ""
                                                                                                       )
                                                                                               else
-                                                                                                  selectedCertIndexState
-                                                                                                      .Set(-1)
+                                                                                                  selectedCertIndexState.Set
+                                                                                                      -1
 
-                                                                                                  newCertTitleState
-                                                                                                      .Set("")
-
-                                                                                                  newCertIssuerState
-                                                                                                      .Set("")
-
-                                                                                                  newCertDateState.Set(
+                                                                                                  newCertTitleState.Set
                                                                                                       ""
-                                                                                                  )
 
-                                                                                                  newCertLabelState
-                                                                                                      .Set("")
+                                                                                                  newCertIssuerState.Set
+                                                                                                      ""
 
-                                                                                                  newCertWebsiteState
-                                                                                                      .Set(""))
+                                                                                                  newCertDateState.Set
+                                                                                                      ""
+
+                                                                                                  newCertLabelState.Set
+                                                                                                      ""
+
+                                                                                                  newCertWebsiteState.Set
+                                                                                                      "")
                                                                                       ListBox.itemTemplate (
                                                                                           DataTemplateView<_>.create
                                                                                               (fun
@@ -1890,9 +1817,8 @@ type Views =
                                                                                                                   then
                                                                                                                       null
                                                                                                                   else
-                                                                                                                      Uri(
+                                                                                                                      Uri
                                                                                                                           newCertWebsiteState.Current
-                                                                                                                      )
 
                                                                                                               let cert =
                                                                                                                   Certification(
@@ -1903,36 +1829,23 @@ type Views =
                                                                                                                       website
                                                                                                                   )
 
-                                                                                                              certificationsState
-                                                                                                                  .Current
-                                                                                                                  .Add(
-                                                                                                                      cert
-                                                                                                                  )
+                                                                                                              certificationsState.Current.Add
+                                                                                                                  cert
 
-                                                                                                              newCertTitleState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertTitleState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertIssuerState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertIssuerState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertDateState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertDateState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertLabelState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertLabelState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertWebsiteState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ]
+                                                                                                              newCertWebsiteState.Set
+                                                                                                                  "") ]
                                                                                             Button.create
                                                                                                 [ Button.content
                                                                                                       "Update"
@@ -1968,9 +1881,8 @@ type Views =
                                                                                                                   then
                                                                                                                       null
                                                                                                                   else
-                                                                                                                      Uri(
+                                                                                                                      Uri
                                                                                                                           newCertWebsiteState.Current
-                                                                                                                      )
 
                                                                                                               certificationsState.Current.[selectedCertIndexState.Current] <-
                                                                                                                   cert
@@ -1990,41 +1902,26 @@ type Views =
                                                                                                               selectedCertIndexState.Current
                                                                                                               >= 0
                                                                                                           then
-                                                                                                              certificationsState
-                                                                                                                  .Current
-                                                                                                                  .RemoveAt(
-                                                                                                                      selectedCertIndexState.Current
-                                                                                                                  )
+                                                                                                              certificationsState.Current.RemoveAt
+                                                                                                                  selectedCertIndexState.Current
 
-                                                                                                              selectedCertIndexState
-                                                                                                                  .Set(
-                                                                                                                      -1
-                                                                                                                  )
+                                                                                                              selectedCertIndexState.Set
+                                                                                                                  -1
 
-                                                                                                              newCertTitleState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertTitleState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertIssuerState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertIssuerState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertDateState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertDateState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertLabelState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newCertLabelState.Set
+                                                                                                                  ""
 
-                                                                                                              newCertWebsiteState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ] ] ] ] ]
+                                                                                                              newCertWebsiteState.Set
+                                                                                                                  "") ] ] ] ] ]
                                                                 ) ]
 
                                                           // Education Expander
@@ -2054,65 +1951,54 @@ type Views =
 
                                                                                                   selectedEduIndexState
                                                                                                       .Set(
-                                                                                                          educationsState
-                                                                                                              .Current
-                                                                                                              .IndexOf(
-                                                                                                                  edu
-                                                                                                              )
+                                                                                                          educationsState.Current.IndexOf
+                                                                                                              edu
                                                                                                       )
 
-                                                                                                  newEduSchoolState
-                                                                                                      .Set(edu.School)
+                                                                                                  newEduSchoolState.Set
+                                                                                                      edu.School
 
-                                                                                                  newEduDegreeState
-                                                                                                      .Set(edu.Degree)
+                                                                                                  newEduDegreeState.Set
+                                                                                                      edu.Degree
 
-                                                                                                  newEduAreaState.Set(
+                                                                                                  newEduAreaState.Set
                                                                                                       edu.Area
-                                                                                                  )
 
-                                                                                                  newEduGradeState.Set(
+                                                                                                  newEduGradeState.Set
                                                                                                       edu.Grade
-                                                                                                  )
 
-                                                                                                  newEduLocationState
-                                                                                                      .Set(
-                                                                                                          edu.Location
-                                                                                                      )
+                                                                                                  newEduLocationState.Set
+                                                                                                      edu.Location
 
-                                                                                                  newEduPeriodState
-                                                                                                      .Set(edu.Period)
+                                                                                                  newEduPeriodState.Set
+                                                                                                      edu.Period
 
-                                                                                                  newEduWebsiteState
-                                                                                                      .Set(
-                                                                                                          edu.Website
-                                                                                                      )
+                                                                                                  newEduWebsiteState.Set
+                                                                                                      edu.Website
                                                                                               else
-                                                                                                  selectedEduIndexState
-                                                                                                      .Set(-1)
+                                                                                                  selectedEduIndexState.Set
+                                                                                                      -1
 
-                                                                                                  newEduSchoolState
-                                                                                                      .Set("")
-
-                                                                                                  newEduDegreeState
-                                                                                                      .Set("")
-
-                                                                                                  newEduAreaState.Set(
+                                                                                                  newEduSchoolState.Set
                                                                                                       ""
-                                                                                                  )
 
-                                                                                                  newEduGradeState.Set(
+                                                                                                  newEduDegreeState.Set
                                                                                                       ""
-                                                                                                  )
 
-                                                                                                  newEduLocationState
-                                                                                                      .Set("")
+                                                                                                  newEduAreaState.Set
+                                                                                                      ""
 
-                                                                                                  newEduPeriodState
-                                                                                                      .Set("")
+                                                                                                  newEduGradeState.Set
+                                                                                                      ""
 
-                                                                                                  newEduWebsiteState
-                                                                                                      .Set(""))
+                                                                                                  newEduLocationState.Set
+                                                                                                      ""
+
+                                                                                                  newEduPeriodState.Set
+                                                                                                      ""
+
+                                                                                                  newEduWebsiteState.Set
+                                                                                                      "")
                                                                                       ListBox.itemTemplate (
                                                                                           DataTemplateView<_>.create
                                                                                               (fun (edu: Education) ->
@@ -2194,46 +2080,29 @@ type Views =
                                                                                                                       newEduWebsiteState.Current
                                                                                                                   )
 
-                                                                                                              educationsState
-                                                                                                                  .Current
-                                                                                                                  .Add(
-                                                                                                                      edu
-                                                                                                                  )
+                                                                                                              educationsState.Current.Add
+                                                                                                                  edu
 
-                                                                                                              newEduSchoolState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduSchoolState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduDegreeState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduDegreeState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduAreaState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduAreaState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduGradeState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduGradeState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduLocationState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduLocationState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduPeriodState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduPeriodState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduWebsiteState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ]
+                                                                                                              newEduWebsiteState.Set
+                                                                                                                  "") ]
                                                                                             Button.create
                                                                                                 [ Button.content
                                                                                                       "Update"
@@ -2289,51 +2158,32 @@ type Views =
                                                                                                               selectedEduIndexState.Current
                                                                                                               >= 0
                                                                                                           then
-                                                                                                              educationsState
-                                                                                                                  .Current
-                                                                                                                  .RemoveAt(
-                                                                                                                      selectedEduIndexState.Current
-                                                                                                                  )
+                                                                                                              educationsState.Current.RemoveAt
+                                                                                                                  selectedEduIndexState.Current
 
-                                                                                                              selectedEduIndexState
-                                                                                                                  .Set(
-                                                                                                                      -1
-                                                                                                                  )
+                                                                                                              selectedEduIndexState.Set
+                                                                                                                  -1
 
-                                                                                                              newEduSchoolState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduSchoolState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduDegreeState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduDegreeState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduAreaState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduAreaState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduGradeState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduGradeState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduLocationState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduLocationState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduPeriodState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )
+                                                                                                              newEduPeriodState.Set
+                                                                                                                  ""
 
-                                                                                                              newEduWebsiteState
-                                                                                                                  .Set(
-                                                                                                                      ""
-                                                                                                                  )) ] ] ] ] ]
+                                                                                                              newEduWebsiteState.Set
+                                                                                                                  "") ] ] ] ] ]
                                                                 ) ] ] ]
                                           ) ]
 
@@ -2344,19 +2194,19 @@ type Views =
                                           StackPanel.horizontalAlignment HorizontalAlignment.Right
                                           StackPanel.verticalAlignment VerticalAlignment.Bottom
                                           StackPanel.children
-                                              [ ComboBox.create [ 
-                                                ComboBox.dataItems xsltFilesState.Current;
-                                                ComboBox.selectedIndex selectedXsltIndexState.Current
-                                                ComboBox.onSelectedIndexChanged (fun index ->
-                                                    selectedXsltIndexState.Set index
-                                                    index |> xsltFilesState.Current.GetValue :?> XsltFile |> Some |> selectedXsltState.Set
-                                                )
-                                                ComboBox.itemTemplate (
-                                                    DataTemplateView<_>.create(fun (f:XsltFile)->
-                                                        TextBlock.create [TextBlock.text f.Name]
-                                                    )
-                                                )
-                                                ]
+                                              [ ComboBox.create
+                                                    [ ComboBox.dataItems xsltFilesState.Current
+                                                      ComboBox.selectedIndex selectedXsltIndexState.Current
+                                                      ComboBox.onSelectedIndexChanged (fun index ->
+                                                          selectedXsltIndexState.Set index
+
+                                                          index |> xsltFilesState.Current.GetValue :?> XsltFile
+                                                          |> Some
+                                                          |> selectedXsltState.Set)
+                                                      ComboBox.itemTemplate (
+                                                          DataTemplateView<_>.create (fun (f: XsltFile) ->
+                                                              TextBlock.create [ TextBlock.text f.Name ])
+                                                      ) ]
                                                 Button.create
                                                     [ Button.content "Load from XML"
                                                       Button.onClick (fun _ -> loadFromXml states) ]
@@ -2373,12 +2223,14 @@ type Views =
                                                                                 startGenerateResume Xml) ]
                                                                       MenuItem.create
                                                                           [ MenuItem.header "HTML"
-                                                                            MenuItem.isEnabled selectedXsltState.Current.IsSome
+                                                                            MenuItem.isEnabled
+                                                                                selectedXsltState.Current.IsSome
                                                                             MenuItem.onClick (fun _ ->
                                                                                 startGenerateResume Html) ]
                                                                       MenuItem.create
                                                                           [ MenuItem.header "PDF"
-                                                                            MenuItem.isEnabled selectedXsltState.Current.IsSome
+                                                                            MenuItem.isEnabled
+                                                                                selectedXsltState.Current.IsSome
                                                                             MenuItem.onClick (fun _ ->
                                                                                 startGenerateResume Pdf) ] ] ]
                                                       ) ] ] ] ] ] ] ])

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:ext="urn:ExtObj">
     <xsl:output method="html" indent="yes" encoding="UTF-8"/>
     
     <xsl:template match="/">
@@ -457,7 +457,7 @@
                             <h6 class="mb-1.5 text-(--primary-color)">Summary</h6>
                             <div class="section-content">
                                 <div class="_tiptap_content_11g7w_1">
-                                    <xsl:value-of select="summary" disable-output-escaping="yes"/>
+                                    <xsl:value-of select="ext:ConvertToHtml(summary)" disable-output-escaping="yes"/>
                                 </div>
                             </div>
                         </section>
@@ -599,7 +599,7 @@
                 <xsl:if test="description != ''">
                     <div class="section-item-description">
                         <div class="_tiptap_content_11g7w_1">
-                            <xsl:value-of select="description" disable-output-escaping="yes"/>
+                            <xsl:value-of select="ext:ConvertToHtml(description)" disable-output-escaping="yes"/>
                         </div>
                     </div>
                 </xsl:if>

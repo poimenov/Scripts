@@ -30,6 +30,10 @@ type GenerateToFormat =
     | Xml
     | Html
 
+type XsltFile (name: string, path: string) =
+    member val Name = name with get, set
+    member val Path = path with get, set
+
 [<Serializable>]
 type Education
     (school: string, degree: string, area: string, grade: string, location: string, period: string, website: string) =
@@ -151,12 +155,17 @@ let chooseFile (format: GenerateToFormat) =
 
                 options.SuggestedFileType <- fileType
                 options
-
-            let! file = win.StorageProvider.SaveFilePickerAsync saveOptions |> Async.AwaitTask
-            return Some file
-    // let! file = win.StorageProvider.SaveFilePickerAsync saveOptions |> Async.AwaitTask
-    // return if isNull file then None else Some file.Path.LocalPath
+            
+            use! file = win.StorageProvider.SaveFilePickerAsync saveOptions |> Async.AwaitTask
+            return if isNull file then None else Some file.Path.LocalPath
     }
+
+let getXsltFiles =
+    let folder = Path.Combine(__SOURCE_DIRECTORY__, "xslt") |> DirectoryInfo
+    if folder.Exists then  
+        folder.GetFiles "*.xslt" |> Array.map(fun f -> XsltFile(Path.GetFileNameWithoutExtension f.Name, f.FullName))
+    else
+        Array.empty
 
 let chooseXmlPath () =
     async {
@@ -342,8 +351,8 @@ let getXmlDoc
 
     doc
 
-let transformXmlToHtml (doc: XDocument) =
-    let xsltPath = Path.Combine(__SOURCE_DIRECTORY__, "xslt", "default.xslt")
+let transformXmlToHtml (doc: XDocument, xsltPath:string) =
+    //let xsltPath = Path.Combine(__SOURCE_DIRECTORY__, "xslt", "default.xslt")
     let xslt = new XslCompiledTransform()
     xslt.Load xsltPath
     use stringWriter = new StringWriter()
@@ -577,6 +586,9 @@ type Views =
         Component(fun ctx ->
             // states
             let pictureUriState: IWritable<Uri option> = ctx.useState None
+            let selectedXsltState: IWritable<XsltFile option> = ctx.useState None
+            let xsltFilesState : IWritable<XsltFile array> = ctx.useState Array.empty
+            let selectedXsltIndexState = ctx.useState -1
             let nameState = ctx.useState ""
             let headlineState = ctx.useState ""
             let emailState = ctx.useState ""
@@ -626,6 +638,18 @@ type Views =
             let newEduWebsiteState = ctx.useState ""
             let selectedEduIndexState = ctx.useState -1
 
+            ctx.useEffect (
+                handler = 
+                    (fun _ ->
+                        xsltFilesState.Set getXsltFiles
+                        if xsltFilesState.Current.Length > 0 
+                        then 
+                            let defaultXslt = xsltFilesState.Current |> Array.head
+                            selectedXsltIndexState.Set 0
+                            selectedXsltState.Set (Some defaultXslt)
+                ), triggers = [ EffectTrigger.AfterInit ])
+
+
             let imgSource =
                 match pictureUriState.Current with
                 | None -> null
@@ -634,7 +658,7 @@ type Views =
 
                     if s.StartsWith "data:" then
                         try
-                            let comma = s.IndexOf(',')
+                            let comma = s.IndexOf ','
 
                             if comma >= 0 then
                                 let base64 = s.Substring(comma + 1)
@@ -653,9 +677,9 @@ type Views =
                         else
                             null
 
-            let generateResume (format: GenerateToFormat, filePath: string) =
+            let generateResume (format: GenerateToFormat, outputFilePath: string, xsltFilePath: string option) =
                 async {
-                    if not (String.IsNullOrWhiteSpace filePath) then
+                    if not (String.IsNullOrWhiteSpace outputFilePath) then
                         let xml =
                             getXmlDoc (
                                 pictureUriState.Current
@@ -676,28 +700,34 @@ type Views =
                             )
 
                         match format with
-                        | GenerateToFormat.Xml -> xml.Save filePath
+                        | GenerateToFormat.Xml -> xml.Save outputFilePath
                         | GenerateToFormat.Html ->
-                            let html = transformXmlToHtml xml
-                            File.WriteAllText(filePath, html)
+                            match xsltFilePath with
+                            | Some xsltPath ->
+                                let html = transformXmlToHtml (xml, xsltPath)
+                                File.WriteAllText(outputFilePath, html)
+                            | None -> ()
                         | GenerateToFormat.Pdf ->
-                            let html = transformXmlToHtml xml
-                            do! generatePdfFromHtml (html, filePath) |> Async.AwaitTask
+                            match xsltFilePath with
+                            | Some xsltPath ->
+                                let html = transformXmlToHtml (xml, xsltPath)
+                                do! generatePdfFromHtml (html, outputFilePath) |> Async.AwaitTask
+                            | None -> ()                        
                 }
                 |> Async.StartImmediate
 
             let startGenerateResume (format: GenerateToFormat) =
                 async {
-                    let! fileOpt = chooseFile format
-
-                    match fileOpt with
+                    let! file = chooseFile format
+                    match file with
                     | None -> ()
-                    | Some file ->
-                        if not (isNull file) then
-                            let path = file.Path.LocalPath
-                            file.Dispose()
-                            generateResume (format, path)
-
+                    | Some outputPath -> 
+                        match format with
+                        | Xml -> generateResume (format, outputPath, None)
+                        | _ ->
+                            match selectedXsltState.Current with
+                            | Some xsltFile -> generateResume (format, outputPath, Some xsltFile.Path)
+                            | None ->()
                 }
                 |> Async.StartImmediate
 
@@ -2314,7 +2344,20 @@ type Views =
                                           StackPanel.horizontalAlignment HorizontalAlignment.Right
                                           StackPanel.verticalAlignment VerticalAlignment.Bottom
                                           StackPanel.children
-                                              [ Button.create
+                                              [ ComboBox.create [ 
+                                                ComboBox.dataItems xsltFilesState.Current;
+                                                ComboBox.selectedIndex selectedXsltIndexState.Current
+                                                ComboBox.onSelectedIndexChanged (fun index ->
+                                                    selectedXsltIndexState.Set index
+                                                    index |> xsltFilesState.Current.GetValue :?> XsltFile |> Some |> selectedXsltState.Set
+                                                )
+                                                ComboBox.itemTemplate (
+                                                    DataTemplateView<_>.create(fun (f:XsltFile)->
+                                                        TextBlock.create [TextBlock.text f.Name]
+                                                    )
+                                                )
+                                                ]
+                                                Button.create
                                                     [ Button.content "Load from XML"
                                                       Button.onClick (fun _ -> loadFromXml states) ]
                                                 DropDownButton.create
@@ -2330,10 +2373,12 @@ type Views =
                                                                                 startGenerateResume Xml) ]
                                                                       MenuItem.create
                                                                           [ MenuItem.header "HTML"
+                                                                            MenuItem.isEnabled selectedXsltState.Current.IsSome
                                                                             MenuItem.onClick (fun _ ->
                                                                                 startGenerateResume Html) ]
                                                                       MenuItem.create
                                                                           [ MenuItem.header "PDF"
+                                                                            MenuItem.isEnabled selectedXsltState.Current.IsSome
                                                                             MenuItem.onClick (fun _ ->
                                                                                 startGenerateResume Pdf) ] ] ]
                                                       ) ] ] ] ] ] ] ])
@@ -2361,7 +2406,7 @@ type App() =
 
     override this.Initialize() =
         this.Styles.Add(Themes.Fluent.FluentTheme())
-        this.RequestedThemeVariant <- Styling.ThemeVariant.Dark
+        this.RequestedThemeVariant <- ThemeVariant.Dark
         this.Styles.Load "avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"
 
     override this.OnFrameworkInitializationCompleted() =

@@ -63,7 +63,7 @@
                     .profile-picture {
                         width: var(--sidebar-width);
                         height: 120px;
-			            text-align: center;
+                        text-align: center;
                     }
 
                     .profile-picture img {
@@ -140,46 +140,25 @@
                     }
 
                     .page-section {
-                        margin-bottom: 12px;
+                        margin-bottom: 2px;
                     }
 
                     .page-section h6 {
                         color: var(--primary-color);
                         font-size: 18px;
                         font-weight: 600;
-                        margin-bottom: 10px;
+                        margin-bottom: 2px;
                         padding-bottom: 2px;
                         border-bottom: 2px solid var(--primary-color);
                         text-transform: uppercase;
                         letter-spacing: 0.5px;
-                    }                    
+                    }
 
                     .content {
                         flex: 1;
                     }
 
-                    /* Sections */
-                    .section {
-                        margin-bottom: 24px;
-                    }
-
-                    .section-title {
-                        color: var(--primary-color);
-                        font-size: 18px;
-                        font-weight: 600;
-                        margin-bottom: 12px;
-                        padding-bottom: 4px;
-                        border-bottom: 2px solid var(--primary-color);
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                    }
-
-                    .section-items {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 12px;
-                    }
-
+                    /* Section Items */
                     .section-item {
                         padding-bottom: 4px;
                     }
@@ -199,31 +178,57 @@
 
                     .section-content strong {
                         color: #1f2937;
-                    }                    
+                    }
 
-                    .item-title {
+                    /* Section Item Header */
+                    .section-item-header {
+                        margin-bottom: 2px;
+                    }
+
+                    .section-item-title {
                         font-weight: 600;
                         font-size: 16px;
                         color: #1f2937;
+                        text-decoration: none;
                     }
 
-                    .item-metadata {
+                    .section-item-metadata {
                         font-size: 14px;
                         color: #6b7280;
                     }
 
-                    .item-keywords {
+                    .section-item-keywords {
                         font-size: 14px;
                         color: #4b5563;
                         margin-top: 2px;
                     }
 
+                    .section-item-description {
+                        margin-top: 8px;
+                        font-size: 14px;
+                        color: #4b5563;
+                    }
+
+                    .flex-between a {
+                        color: var(--primary-color);
+                        text-decoration: none;
+                        font-size: 13px;
+                    }
+
+                    .flex-between a:hover {
+                        text-decoration: underline;
+                    }
+
                     /* Languages */
+                    .languages-item {
+                        margin-top: 4px;
+                    }
+
                     .language-level {
                         display: flex;
                         gap: 6px;
-                        margin-top: 4px;
-                        margin-bottom: 12px;
+                        margin-top: 2px;
+                        margin-bottom: 2px;
                     }
 
                     .level-dot {
@@ -237,71 +242,23 @@
                         background: var(--primary-color);
                     }
 
-                    /* Certifications */
-                    .cert-row {
-                        display: flex;
-                        justify-content: space-between;
-                        gap: 8px;
-                        margin-bottom: 2px;
-                    }
-
-                    .cert-website {
-                        margin-top: 4px;
-                    }
-
-                    .cert-website a {
-                        color: var(--primary-color);
-                        text-decoration: none;
-                        font-size: 13px;
-                    }
-
-                    /* Summary 
-                    .summary-content {
-                        font-size: 14px;
-                        line-height: 1.6;
-                        color: #4b5563;
-                    }
-
-                    .summary-content p {
-                        margin-bottom: 12px;
-                    }
-
-                    .summary-content ul {
-                        margin: 12px 0;
-                        padding-left: 24px;
-                    }
-
-                    .summary-content li {
-                        margin-bottom: 6px;
-                    }
-
-                    .summary-content strong {
-                        color: #1f2937;
-                    }
-                    */
-                    /* Experience */
-                    .exp-row {
-                        display: flex;
-                        justify-content: space-between;
-                        gap: 12px;
-                        margin-bottom: 2px;
-                    }
-
-                    .exp-description {
-                        margin-top: 8px;
-                        font-size: 14px;
-                        color: #4b5563;
-                    }
-
-                    /* Education */
-                    .edu-row {
-                        display: flex;
-                        justify-content: space-between;
-                        gap: 12px;
-                        margin-bottom: 2px;
-                    }
-
                     /* Utilities */
+                    .flex {
+                        display: flex;
+                    }
+
+                    .flex-between {
+                        display: flex;
+                        justify-content: space-between;
+                        gap: 12px;
+                        margin-bottom: 2px;
+                    }
+
+                    .flex-col {
+                        display: flex;
+                        justify-content: space-between;
+                    }
+
                     .text-end {
                         text-align: right;
                     }
@@ -321,25 +278,6 @@
                     .shrink-0 {
                         flex-shrink: 0;
                     }
-
-                    .mt-2 {
-                        margin-top: 2px;
-                    }
-
-                    .mb-2 {
-                        margin-bottom: 8px;
-                    }
-
-                    .gap-x-2 {
-                        column-gap: 8px;
-                    }
-                    
-                    .flex {
-                        display: flex;
-                        justify-content: space-between;
-                        gap: 12px;
-                        margin-bottom: 2px;                      
-                    }                                      
 
                     @media print {
                         body {
@@ -422,8 +360,8 @@
                     <!-- Skills -->
                     <xsl:if test="skills/skill">
                         <section class="page-section">
-                            <h6 class="mb-1.5 text-(--primary-color)">Skills</h6>
-                            <div class="section-content grid">
+                            <h6>Skills</h6>
+                            <div class="section-content">
                                 <xsl:apply-templates select="skills/skill"/>
                             </div>
                         </section>
@@ -432,8 +370,8 @@
                     <!-- Certifications -->
                     <xsl:if test="certifications/certification">
                         <section class="page-section">
-                            <h6 class="mb-1.5 text-(--primary-color)">Certifications</h6>
-                            <div class="section-content grid">
+                            <h6>Certifications</h6>
+                            <div class="section-content">
                                 <xsl:apply-templates select="certifications/certification"/>
                             </div>
                         </section>
@@ -442,8 +380,8 @@
                     <!-- Languages -->
                     <xsl:if test="languages/language">
                         <section class="page-section">
-                            <h6 class="mb-1.5 text-(--primary-color)">Languages</h6>
-                            <div class="section-content grid">
+                            <h6>Languages</h6>
+                            <div class="section-content">
                                 <xsl:apply-templates select="languages/language"/>
                             </div>
                         </section>
@@ -454,7 +392,7 @@
                     <!-- Summary -->
                     <xsl:if test="summary != ''">
                         <section class="page-section">
-                            <h6 class="mb-1.5 text-(--primary-color)">Summary</h6>
+                            <h6>Summary</h6>
                             <div class="section-content">
                                 <div class="_tiptap_content_11g7w_1">
                                     <xsl:value-of select="ext:ConvertToHtml(summary)" disable-output-escaping="yes"/>
@@ -466,8 +404,8 @@
                     <!-- Experience -->
                     <xsl:if test="experiences/experience">
                         <section class="page-section">
-                            <h6 class="mb-1.5 text-(--primary-color)">Experience</h6>
-                            <div class="section-content grid">
+                            <h6>Experience</h6>
+                            <div class="section-content">
                                 <xsl:apply-templates select="experiences/experience"/>
                             </div>
                         </section>
@@ -476,8 +414,8 @@
                     <!-- Education -->
                     <xsl:if test="educations/education">
                         <section class="page-section">
-                            <h6 class="mb-1.5 text-(--primary-color)">Education</h6>
-                            <div class="section-content grid">
+                            <h6>Education</h6>
+                            <div class="section-content">
                                 <xsl:apply-templates select="educations/education"/>
                             </div>
                         </section>
@@ -502,19 +440,16 @@
         </div>    
     </xsl:template>
 
-
     <xsl:template match="skill">
         <div class="section-item">
-            <div class="skills-item">
-                <div class="section-item-header flex flex-col">
-                    <strong class="section-item-title"><xsl:value-of select="name"/></strong>
-                </div>
-                <xsl:if test="keywords/keyword">
-                    <div class="section-item-keywords opacity-80">
-                        <xsl:apply-templates select="keywords/keyword"/>
-                    </div>
-                </xsl:if>
+            <div class="section-item-header flex-col">
+                <strong class="section-item-title"><xsl:value-of select="name"/></strong>
             </div>
+            <xsl:if test="keywords/keyword">
+                <div class="section-item-keywords opacity-80">
+                    <xsl:apply-templates select="keywords/keyword"/>
+                </div>
+            </xsl:if>
         </div>
     </xsl:template>
 
@@ -527,35 +462,32 @@
 
     <xsl:template match="certification">
         <div class="section-item">
-            <div class="certifications-item">
-                <div class="section-item-header">
-                    <div class="flex gap-x-2">
-                        <strong class="section-item-title"><xsl:value-of select="title"/></strong>
-                        <xsl:if test="date != ''">
-                            <span class="section-item-metadata shrink-0 text-end"><xsl:value-of select="date"/></span>
-                        </xsl:if>
-                    </div>
-                    <xsl:if test="issuer != ''">
-                        <div class="flex gap-x-2">
-                            <span class="section-item-metadata"><xsl:value-of select="issuer"/></span>
-                        </div>
+            <div class="section-item-header">
+                <div class="flex-between">
+                    <strong class="section-item-title"><xsl:value-of select="title"/></strong>
+                    <xsl:if test="date != ''">
+                        <span class="section-item-metadata shrink-0 text-end"><xsl:value-of select="date"/></span>
                     </xsl:if>
                 </div>
-                <xsl:if test="website != ''">
-                    <div class="section-item-website mt-2">
-                        <a href="{website/OriginalString}" target="_blank" rel="noopener" class="inline-block text-wrap break-all">
+                <div class="flex-between">    
+                    <xsl:if test="issuer != ''">                    
+                        <span class="section-item-metadata"><xsl:value-of select="issuer"/></span>                    
+                    </xsl:if>
+                    <xsl:if test="website != ''">
+                        <a href="{website}" target="_blank" rel="noopener" class="inline-block text-wrap break-all">
                             <xsl:value-of select="label"/>
                         </a>
-                    </div>
-                </xsl:if>
+                    </xsl:if>  
+                </div>              
             </div>
+
         </div>
     </xsl:template>
 
     <xsl:template match="language">
         <div class="section-item">
             <div class="languages-item">
-                <div class="section-item-header flex flex-col">
+                <div class="section-item-header flex-col">
                     <strong class="section-item-title"><xsl:value-of select="name"/></strong>
                     <xsl:if test="fluency != ''">
                         <span class="section-item-metadata opacity-80"><xsl:value-of select="fluency"/></span>
@@ -574,10 +506,10 @@
         <div class="section-item">
             <div class="experience-item">
                 <div class="section-item-header">
-                    <div class="flex gap-x-2">
+                    <div class="flex-between">
                         <xsl:choose>
                             <xsl:when test="website != ''">
-                                <a href="{website/OriginalString}" target="_blank" rel="noopener" class="inline-block section-item-title">
+                                <a href="{website}" target="_blank" rel="noopener" class="section-item-title">
                                     <strong><xsl:value-of select="company"/></strong>
                                 </a>
                             </xsl:when>
@@ -589,7 +521,7 @@
                             <span class="section-item-metadata shrink-0 text-end"><xsl:value-of select="location"/></span>
                         </xsl:if>
                     </div>
-                    <div class="flex gap-x-2">
+                    <div class="flex-between">
                         <span class="section-item-metadata"><xsl:value-of select="position"/></span>
                         <xsl:if test="period != ''">
                             <span class="section-item-metadata shrink-0 text-end"><xsl:value-of select="period"/></span>
@@ -610,11 +542,11 @@
     <xsl:template match="education">
         <div class="section-item">
             <div class="education-item">
-                <div class="section-item-header mb-2">
-                    <div class="flex gap-x-2">
+                <div class="section-item-header">
+                    <div class="flex-between">
                         <xsl:choose>
                             <xsl:when test="website != ''">
-                                <a href="{website}" target="_blank" rel="noopener" class="inline-block section-item-title">
+                                <a href="{website}" target="_blank" rel="noopener" class="section-item-title">
                                     <strong><xsl:value-of select="school"/></strong>
                                 </a>
                             </xsl:when>
@@ -629,7 +561,7 @@
                             </span>
                         </xsl:if>
                     </div>
-                    <div class="flex gap-x-2">
+                    <div class="flex-between">
                         <xsl:if test="area != ''">
                             <span class="section-item-metadata"><xsl:value-of select="area"/></span>
                         </xsl:if>

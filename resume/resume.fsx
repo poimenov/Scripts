@@ -375,7 +375,7 @@ let generatePdfFromHtml (htmlContent: string, outputPath: string) =
     task {
         let browserFetcher = new BrowserFetcher()
         let! _installedBrowser = browserFetcher.DownloadAsync()
-        use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true))
+        use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true, Args = [|"--no-sandbox"; "--disable-setuid-sandbox"|]))
         use! page = browser.NewPageAsync()
         do! page.SetContentAsync htmlContent
 

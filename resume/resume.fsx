@@ -1,9 +1,10 @@
-#r "nuget: Avalonia"
+#if INTERACTIVE
 #r "nuget: Avalonia.Desktop"
 #r "nuget: Avalonia.Themes.Fluent"
 #r "nuget: Avalonia.FuncUI"
 #r "nuget: PuppeteerSharp"
 #r "nuget: Markdig"
+#endif
 
 open System
 open System.Collections.ObjectModel
@@ -40,7 +41,6 @@ type MdTransform() =
     member _.ConvertToHtml(text: string) =
         let pipeline = MarkdownPipelineBuilder().UseAdvancedExtensions().Build()
         Markdown.ToHtml(text, pipeline)
-
 
 [<Serializable>]
 type Education
@@ -81,6 +81,14 @@ type Certification(title: string, issuer: string, date: string, label: string, w
     member val Date = date with get, set
     member val Label = label with get, set
     member val Website = website with get, set
+
+let getCurrentDirectory =
+    #if INTERACTIVE
+    __SOURCE_DIRECTORY__
+    #endif
+    #if COMPILED
+    AppContext.BaseDirectory
+    #endif
 
 let emailRegex = Regex("^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled)
 let phoneRegex = Regex("^\+?[0-9\s\-()]+$", RegexOptions.Compiled)
@@ -169,7 +177,7 @@ let chooseFile (format: GenerateToFormat) =
     }
 
 let getXsltFiles =
-    let folder = Path.Combine(__SOURCE_DIRECTORY__, "xslt") |> DirectoryInfo
+    let folder = Path.Combine(getCurrentDirectory, "xslt") |> DirectoryInfo
 
     if folder.Exists then
         folder.GetFiles "*.xslt"
@@ -2248,7 +2256,9 @@ type MainWindow() as this =
         base.Title <- "Resume Generator"
         base.Width <- 800.0
         base.Height <- 600.0
-        base.Icon <- new WindowIcon(new Bitmap(Path.Combine(__SOURCE_DIRECTORY__, "..", "img", "Fsharp_logo.png")))
+#if INTERACTIVE        
+        base.Icon <- new WindowIcon(new Bitmap(Path.Combine(getCurrentDirectory, "favicon.ico")))
+#endif        
         base.Styles.Add invalidTextBoxStyle
         this.Content <- Views.main ()
 
@@ -2269,5 +2279,22 @@ type App() =
             printfn "App running..."
         | _ -> ()
 
+
+#if INTERACTIVE
 let app =
-    AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime([||])
+    AppBuilder.Configure<App>()
+        .UsePlatformDetect()
+        .StartWithClassicDesktopLifetime 
+        [||]
+#endif
+#if COMPILED
+module Program =
+    [<STAThread>]
+    [<EntryPoint>]
+    let main (args: string[]) =
+        AppBuilder
+            .Configure<App>()
+            .UsePlatformDetect()
+            .StartWithClassicDesktopLifetime
+            args
+#endif    

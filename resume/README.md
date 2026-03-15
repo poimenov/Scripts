@@ -1,6 +1,7 @@
 # Resume
 
 Script screen:
+
 ![Screenshot of the script UI](../img/resume.script.jpg)
 
 ## Description

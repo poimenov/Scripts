@@ -789,7 +789,7 @@ type Views =
                                                                     HorizontalAlignment.Stretch
                                                                 Expander.content (
                                                                     StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Horizontal
+                                                                        [ StackPanel.orientation Orientation.Vertical
                                                                           StackPanel.verticalAlignment
                                                                               VerticalAlignment.Center
                                                                           StackPanel.spacing 2.0
@@ -800,7 +800,6 @@ type Views =
                                                                                       Image.maxWidth 90.0 ]
                                                                                 TextBox.create
                                                                                     [ TextBox.watermark "Image path"
-                                                                                      TextBox.width 300.0
                                                                                       TextBox.height 30.0
                                                                                       TextBox.text (
                                                                                           pictureUriState.Current
@@ -817,8 +816,8 @@ type Views =
                                                                                           | None ->
                                                                                               pictureUriState.Set None) ]
                                                                                 Button.create
-                                                                                    [ Button.content "..."
-                                                                                      Button.tip "Choose picture"
+                                                                                    [ Button.content "Choose picture"
+                                                                                      Button.horizontalAlignment HorizontalAlignment.Right
                                                                                       Button.onClick (fun _ ->
                                                                                           async {
                                                                                               let! opt =

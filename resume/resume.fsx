@@ -599,6 +599,686 @@ let loadFromXml (states: LoadStates) =
     }
     |> Async.StartImmediate
 
+let pictureTabConent (imgSource: Bitmap, pictureUriState: IWritable<option<Uri>>) =
+    StackPanel.create [ 
+            StackPanel.orientation Orientation.Vertical
+            StackPanel.verticalAlignment VerticalAlignment.Top
+            StackPanel.classes ["tabContent"]
+            StackPanel.children [
+                Image.create [Image.source imgSource;Image.maxHeight 120.0;Image.maxWidth 120.0 ]
+                TextBox.create [ 
+                    TextBox.watermark "Image path"
+                    TextBox.height 30.0
+                    TextBox.text (
+                        pictureUriState.Current
+                        |> Option.map (fun u -> u.OriginalString)
+                        |> Option.defaultValue "" )
+                    TextBox.onTextChanged (fun t ->
+                        match tryMakeUri t with
+                        | Some u -> pictureUriState.Set(Some u)
+                        | None -> pictureUriState.Set None)]
+                Button.create [
+                    Button.content "Choose picture"
+                    Button.horizontalAlignment HorizontalAlignment.Right
+                    Button.onClick (fun _ ->
+                        async {
+                            let! opt = choosePicturePath ()
+                            opt |> Option.iter(fun p -> pictureUriState.Set(Some p))
+                        }
+                        |> Async.StartImmediate)                     
+                ] ] ]    
+
+let basicInfoTabContent (name: IWritable<string>, 
+    headline: IWritable<string>, email: IWritable<string>, 
+    phone: IWritable<string>, location: IWritable<string>,
+    links: IWritable<ObservableCollection<string>>, selectedLink: IWritable<string>,
+    newLink: IWritable<string>, selectedLinkIndex: IWritable<int>) =
+    StackPanel.create [
+        StackPanel.orientation Orientation.Vertical
+        StackPanel.classes ["tabContent"]
+        StackPanel.children [
+            TextBox.create [ 
+                TextBox.watermark "Name"
+                TextBox.text name.Current
+                TextBox.onTextChanged (fun t -> name.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Headline"
+                TextBox.text headline.Current
+                TextBox.onTextChanged (fun t -> headline.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Email"
+                TextBox.text email.Current
+                TextBox.onTextChanged (fun t -> email.Set t)
+                if email.Current <> "" && not (emailRegex.IsMatch email.Current)
+                then TextBox.classes [ "invalid" ] ]
+            TextBox.create [
+                TextBox.watermark "Phone"
+                TextBox.text phone.Current
+                TextBox.onTextChanged (fun t -> phone.Set t)
+                if phone.Current <> "" && not (phoneRegex.IsMatch phone.Current)
+                then TextBox.classes [ "invalid" ] ]
+            TextBox.create [ 
+                TextBox.watermark "Location"
+                TextBox.text location.Current
+                TextBox.onTextChanged (fun t -> location.Set t) ]
+            TextBlock.create [ 
+                TextBlock.text "Links:" ]
+            ListBox.create [ 
+                ListBox.dataItems links.Current
+                ListBox.selectionMode SelectionMode.Single
+                ListBox.selectedItem selectedLink.Current
+                ListBox.onSelectedIndexChanged (fun index -> selectedLinkIndex.Set index)
+                ListBox.onSelectedItemChanged (fun item ->
+                        newLink.Set(item |> string)
+                        selectedLink.Set(item |> string)) ]
+            TextBox.create [ 
+                TextBox.watermark "New link"
+                TextBox.horizontalAlignment HorizontalAlignment.Stretch
+                TextBox.text newLink.Current
+                TextBox.onTextChanged (fun t -> newLink.Set t)
+                if newLink.Current <> "" && not (isValidUrl newLink.Current)
+                then TextBox.classes [ "invalid" ] ]
+            StackPanel.create [ 
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.spacing 4.0
+                StackPanel.children [ 
+                    Button.create [ 
+                        Button.content "Add"
+                        Button.onClick (fun _ ->
+                                if not ( String.IsNullOrWhiteSpace newLink.Current)
+                                    && isValidUrl newLink.Current
+                                    && links.Current.Contains newLink.Current |> not
+                                then
+                                    links.Current.Add newLink.Current
+                                    newLink.Set"") ]
+                    Button.create [ 
+                        Button.content "Update"
+                        Button.isEnabled (not (String.IsNullOrEmpty selectedLink.Current))
+                        Button.onClick (fun _ ->
+                                if links.Current.Count > 0
+                                    && selectedLinkIndex.Current >= 0
+                                then
+                                    links.Current.[selectedLinkIndex.Current] <- newLink.Current) ]
+                    Button.create [ 
+                        Button.content "Delete"
+                        Button.isEnabled (not (String.IsNullOrEmpty selectedLink.Current))
+                        Button.onClick (fun _ ->
+                                if links.Current.Contains selectedLink.Current
+                                then
+                                    if links.Current.Remove selectedLink.Current
+                                    then selectedLink.Set "") ] ] ]
+                ] ]    
+
+let summaryTabContent (summary: IWritable<string>) =
+    TextBox.create [ 
+        TextBox.watermark "Summary (markdown)"
+        TextBox.margin 10.0
+        TextBox.padding 10.0
+        TextBox.verticalAlignment VerticalAlignment.Top
+        TextBox.text summary.Current
+        TextBox.onTextChanged (fun t -> summary.Set t)
+        TextBox.acceptsReturn true
+        TextBox.height 370.0
+        TextBox.verticalScrollBarVisibility ScrollBarVisibility.Visible
+        TextBox.horizontalScrollBarVisibility ScrollBarVisibility.Visible ]    
+
+let experienceTabContent (experiences: IWritable<ObservableCollection<Experience>>, selectedIndex: IWritable<int>,
+    company: IWritable<string>, position: IWritable<string>, location: IWritable<string>,
+    period: IWritable<string>, description: IWritable<string>, website: IWritable<string>) =
+    StackPanel.create [ 
+        StackPanel.orientation Orientation.Vertical
+        StackPanel.classes ["tabContent"]
+        StackPanel.children [ 
+            ListBox.create [ 
+                ListBox.dataItems experiences.Current
+                ListBox.selectionMode SelectionMode.Single
+                ListBox.onSelectionChanged (fun args ->
+                if args.AddedItems.Count > 0
+                then
+                    let exp = args.AddedItems.[0]:?> Experience
+                    selectedIndex.Set(experiences.Current.IndexOf exp)
+                    company.Set exp.Company
+                    position.Set exp.Position
+                    location.Set exp.Location
+                    period.Set exp.Period
+                    description.Set exp.Description
+                    website.Set(
+                        if exp.Website <> null
+                        then exp.Website.OriginalString
+                        else "")
+                else
+                    selectedIndex.Set -1
+                    company.Set ""
+                    position.Set ""
+                    location.Set ""
+                    period.Set ""
+                    description.Set ""
+                    website.Set "")
+                ListBox.itemTemplate (
+                    DataTemplateView<_>.create(fun (exp: Experience) ->
+                            TextBlock.create [ 
+                                TextBlock.text (sprintf "%s - %s" exp.Company exp.Position) ])
+                        ) ]
+            TextBox.create [ 
+                TextBox.watermark "Company"
+                TextBox.text company.Current
+                TextBox.onTextChanged (fun t -> company.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Position"
+                TextBox.text position.Current
+                TextBox.onTextChanged (fun t -> position.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Location"
+                TextBox.text location.Current
+                TextBox.onTextChanged (fun t -> location.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Period"
+                TextBox.text period.Current
+                TextBox.onTextChanged (fun t -> period.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Website"
+                TextBox.text website.Current
+                TextBox.onTextChanged (fun t -> website.Set t)
+                if website.Current <> "" && not ( isValidUrl website.Current )
+                then TextBox.classes [ "invalid" ] ]
+            TextBox.create [ 
+                TextBox.watermark "Description (markdown)"
+                TextBox.text description.Current
+                TextBox.onTextChanged (fun t -> description.Set t)
+                TextBox.acceptsReturn true
+                TextBox.height 80.0
+                TextBox.verticalScrollBarVisibility ScrollBarVisibility.Auto ]
+            StackPanel.create [ 
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.spacing 4.0
+                StackPanel.children [ 
+                    Button.create [ 
+                        Button.content "Add"
+                        Button.onClick (fun _ ->
+                            if not (String.IsNullOrWhiteSpace company.Current)
+                            then
+                                let websiteUri =
+                                    if String.IsNullOrWhiteSpace website.Current
+                                    then null
+                                    else Uri website.Current
+
+                                let exp =
+                                    Experience(
+                                        company.Current,
+                                        websiteUri,
+                                        position.Current,
+                                        location.Current,
+                                        period.Current,
+                                        description.Current
+                                    )
+
+                                experiences.Current.Add exp
+                                company.Set ""
+                                position.Set ""
+                                location.Set ""
+                                period.Set ""
+                                description.Set ""
+                                website.Set "") ]
+                    Button.create [ 
+                        Button.content "Update"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                            if selectedIndex.Current >= 0
+                            then
+                                let exp = experiences.Current.[selectedIndex.Current]
+                                exp.Company <- company.Current
+                                exp.Position <- position.Current
+                                exp.Location <- location.Current
+                                exp.Period <- period.Current
+                                exp.Description <- description.Current
+                                exp.Website <-
+                                    if String.IsNullOrWhiteSpace website.Current
+                                    then null
+                                    else Uri website.Current
+                                experiences.Current.[selectedIndex.Current] <- exp
+                                experiences.Current |> ignore) ]
+                    Button.create [ 
+                        Button.content "Delete"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    experiences.Current.RemoveAt selectedIndex.Current
+                                    selectedIndex.Set -1
+                                    company.Set ""
+                                    position.Set ""
+                                    location.Set ""
+                                    period.Set ""
+                                    description.Set ""
+                                    website.Set "") ] ] ] ] ]    
+
+let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, selectedIndex: IWritable<int>,
+    name: IWritable<string>, fluency: IWritable<string>, level: IWritable<int>) =
+    StackPanel.create [ 
+        StackPanel.orientation Orientation.Vertical
+        StackPanel.classes ["tabContent"]
+        StackPanel.children [ 
+            ListBox.create [ 
+                ListBox.dataItems languages.Current
+                ListBox.selectionMode SelectionMode.Single
+                ListBox.onSelectionChanged (fun args ->
+                        if args.AddedItems.Count > 0
+                        then
+                            let lang = args.AddedItems.[0] :?> Language
+                            selectedIndex.Set(languages.Current.IndexOf lang)
+                            name.Set lang.Name
+                            fluency.Set lang.Fluency
+                            level.Set lang.Level
+                        else
+                            selectedIndex.Set -1
+                            name.Set ""
+                            fluency.Set ""
+                            level.Set 0)
+                ListBox.itemTemplate (
+                    DataTemplateView<_>.create (fun (lang: Language) ->
+                            TextBlock.create [ 
+                                TextBlock.text (sprintf "%s - %s" lang.Name lang.Fluency) ] ) ) ]
+            TextBox.create [ 
+                TextBox.watermark "Language name"
+                TextBox.text name.Current
+                TextBox.onTextChanged (fun t -> name.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Fluency"
+                TextBox.text fluency.Current
+                TextBox.onTextChanged (fun t -> fluency.Set t) ]
+            StackPanel.create [ 
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.children [ 
+                    TextBlock.create [ 
+                        TextBlock.text "Level: " ]
+                    Slider.create [ 
+                        Slider.minimum 0.0
+                        Slider.maximum 5.0
+                        Slider.tickFrequency 1.0
+                        Slider.tickPlacement TickPlacement.Outside
+                        Slider.value (float level.Current)
+                        Slider.onValueChanged (fun v -> level.Set(int v))
+                        Slider.width 200.0 ]
+                    TextBlock.create [ 
+                        TextBlock.text (string level.Current
+                            ) ] ] ]
+            StackPanel.create [ 
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.spacing 4.0
+                StackPanel.children [ 
+                    Button.create [ 
+                        Button.content "Add"
+                        Button.onClick (fun _ ->
+                                if not (String.IsNullOrWhiteSpace name.Current)
+                                then
+                                    let lang =
+                                        Language(
+                                            name.Current,
+                                            fluency.Current,
+                                            level.Current
+                                        )
+
+                                    languages.Current.Add lang
+                                    name.Set ""
+                                    fluency.Set ""
+                                    level.Set 0) ]
+                    Button.create [ 
+                        Button.content "Update"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    let lang = languages.Current.[selectedIndex.Current]
+                                    lang.Name <- name.Current
+                                    lang.Fluency <- fluency.Current
+                                    lang.Level <- level.Current
+                                    languages.Current.[selectedIndex.Current] <- lang
+                                    languages.Current |> ignore) ]
+                    Button.create [ 
+                        Button.content "Delete"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    languages.Current.RemoveAt selectedIndex.Current
+                                    selectedIndex.Set -1
+                                    name.Set ""
+                                    fluency.Set ""
+                                    level.Set 0) ] ] ] ] ]    
+
+let skillsTabContent (skills: IWritable<ObservableCollection<Skill>>, selectedIndex: IWritable<int>,
+    name: IWritable<string>, keywords: IWritable<string>) =
+    StackPanel.create [ 
+        StackPanel.orientation Orientation.Vertical
+        StackPanel.classes ["tabContent"]
+        StackPanel.children [ 
+            ListBox.create [ 
+                ListBox.dataItems skills.Current
+                ListBox.selectionMode SelectionMode.Single
+                ListBox.onSelectionChanged (fun args ->
+                        if args.AddedItems.Count > 0
+                        then
+                            let skill = args.AddedItems.[0] :?> Skill
+                            selectedIndex.Set(skills.Current.IndexOf skill)
+                            name.Set skill.Name
+                            keywords.Set(String.Join(", ", skill.Keywords))
+                        else
+                            selectedIndex.Set -1
+                            name.Set ""
+                            keywords.Set "")
+                ListBox.itemTemplate (
+                    DataTemplateView<_>.create
+                        (fun (skill: Skill) ->
+                            TextBlock.create [ 
+                                TextBlock.text skill.Name ] ) ) ]
+            TextBox.create [ 
+                TextBox.watermark "Skill name"
+                TextBox.text name.Current
+                TextBox.onTextChanged (fun t -> name.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Keywords (comma separated)"
+                TextBox.text keywords.Current
+                TextBox.onTextChanged (fun t -> keywords.Set t) ]
+            StackPanel.create [ 
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.spacing 4.0
+                StackPanel.children [ 
+                    Button.create [ 
+                        Button.content "Add"
+                        Button.onClick (fun _ ->
+                                if not ( String.IsNullOrWhiteSpace name.Current )
+                                then
+                                    let keywordsList =
+                                        if String.IsNullOrWhiteSpace keywords.Current
+                                        then
+                                            []
+                                        else
+                                            keywords.Current.Split([| ',';';' |], 
+                                            StringSplitOptions.RemoveEmptyEntries)
+                                            |> Array.toList
+
+                                    let skill = Skill(name.Current, keywordsList)
+                                    skills.Current.Add skill
+                                    name.Set ""
+                                    keywords.Set "") ]
+                    Button.create [ 
+                        Button.content "Update"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    let skill = skills.Current.[selectedIndex.Current]
+                                    skill.Name <- name.Current
+                                    skill.Keywords <-
+                                        if String.IsNullOrWhiteSpace keywords.Current
+                                        then
+                                            []
+                                        else
+                                            keywords.Current.Split([| ',';';' |],
+                                            StringSplitOptions.RemoveEmptyEntries)
+                                            |> Array.toList
+
+                                    skills.Current.[selectedIndex.Current] <- skill
+                                    skills.Current |> ignore) ]
+                    Button.create [ 
+                        Button.content "Delete"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    skills.Current.RemoveAt selectedIndex.Current
+                                    selectedIndex.Set -1
+                                    name.Set ""
+                                    keywords.Set "") ] ] ] ] ]   
+
+let cerificationsTabContent (certifications: IWritable<ObservableCollection<Certification>>, selectedIndex: IWritable<int>,
+    title: IWritable<string>, issuer: IWritable<string>, date: IWritable<string>,
+    label: IWritable<string>, website: IWritable<string>) =
+    StackPanel.create [ 
+        StackPanel.orientation Orientation.Vertical
+        StackPanel.classes ["tabContent"]
+        StackPanel.children [ 
+            ListBox.create [ 
+                ListBox.dataItems certifications.Current
+                ListBox.selectionMode SelectionMode.Single
+                ListBox.onSelectionChanged (fun args ->
+                    if args.AddedItems.Count > 0
+                    then
+                        let cert = args.AddedItems.[0] :?> Certification
+                        selectedIndex.Set(certifications.Current.IndexOf cert)
+                        title.Set cert.Title
+                        issuer.Set cert.Issuer
+                        date.Set cert.Date
+                        label.Set cert.Label
+                        website.Set(
+                            if cert.Website <> null
+                            then cert.Website.OriginalString
+                            else "")
+                    else
+                        selectedIndex.Set -1
+                        title.Set ""
+                        issuer.Set ""
+                        date.Set ""
+                        label.Set ""
+                        website.Set "")
+                ListBox.itemTemplate (
+                    DataTemplateView<_>.create(fun(cert: Certification) ->
+                            TextBlock.create [ 
+                                TextBlock.text (sprintf "%s - %s" cert.Title cert.Issuer) ] )
+                ) ]
+            TextBox.create [ 
+                TextBox.watermark "Title"
+                TextBox.text title.Current
+                TextBox.onTextChanged (fun t -> title.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Issuer"
+                TextBox.text issuer.Current
+                TextBox.onTextChanged (fun t -> issuer.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Date"
+                TextBox.text date.Current
+                TextBox.onTextChanged (fun t -> date.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Label"
+                TextBox.text label.Current
+                TextBox.onTextChanged (fun t -> label.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Website"
+                TextBox.text website.Current
+                TextBox.onTextChanged (fun t -> website.Set t)
+                if website.Current <> "" && not (isValidUrl website.Current)
+                then TextBox.classes [ "invalid" ] ]
+            StackPanel.create [ 
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.spacing 4.0
+                StackPanel.children [ 
+                    Button.create [ 
+                        Button.content "Add"
+                        Button.onClick (fun _ ->
+                                if not (String.IsNullOrWhiteSpace title.Current)
+                                then
+                                    let websiteUri =
+                                        if String.IsNullOrWhiteSpace website.Current
+                                        then null
+                                        else Uri website.Current
+
+                                    let cert =
+                                        Certification(
+                                            title.Current,
+                                            issuer.Current,
+                                            date.Current,
+                                            label.Current,
+                                            websiteUri
+                                        )
+
+                                    certifications.Current.Add cert
+                                    title.Set ""
+                                    issuer.Set ""
+                                    date.Set ""
+                                    label.Set ""
+                                    website.Set "") ]
+                    Button.create [ 
+                        Button.content "Update"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    let cert = certifications.Current.[selectedIndex.Current]
+                                    cert.Title <- title.Current
+                                    cert.Issuer <- issuer.Current
+                                    cert.Date <- date.Current
+                                    cert.Label <- label.Current
+                                    cert.Website <-
+                                        if String.IsNullOrWhiteSpace website.Current
+                                        then null
+                                        else Uri website.Current
+                                    certifications.Current.[selectedIndex.Current] <- cert
+                                    certifications.Current |> ignore) ]
+                    Button.create [ 
+                        Button.content "Delete"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    certifications.Current.RemoveAt selectedIndex.Current
+                                    selectedIndex.Set -1
+                                    title.Set ""
+                                    issuer.Set ""
+                                    date.Set ""
+                                    label.Set ""
+                                    website.Set "") ] ] ] ] ]                                        
+
+let educationTabContent (educations: IWritable<ObservableCollection<Education>>, selectedIndex: IWritable<int>,
+    school: IWritable<string>, degree: IWritable<string>, area: IWritable<string>,
+    grade: IWritable<string>, location: IWritable<string>, period: IWritable<string>,
+    website: IWritable<string>) =
+    StackPanel.create [ 
+        StackPanel.orientation Orientation.Vertical
+        StackPanel.classes ["tabContent"]
+        StackPanel.children [ 
+            ListBox.create [ 
+                ListBox.dataItems educations.Current
+                ListBox.selectionMode SelectionMode.Single
+                ListBox.onSelectionChanged (fun args ->
+                    if args.AddedItems.Count > 0
+                    then
+                        let edu = args.AddedItems.[0] :?> Education
+                        selectedIndex.Set(educations.Current.IndexOf edu)
+                        school.Set edu.School
+                        degree.Set edu.Degree
+                        area.Set edu.Area
+                        grade.Set edu.Grade
+                        location.Set edu.Location
+                        period.Set edu.Period
+                        website.Set edu.Website
+                    else
+                        selectedIndex.Set -1
+                        school.Set ""
+                        degree.Set ""
+                        area.Set ""
+                        grade.Set ""
+                        location.Set ""
+                        period.Set ""
+                        website.Set "")
+                ListBox.itemTemplate ( 
+                    DataTemplateView<_>.create(fun (edu: Education) ->
+                            TextBlock.create [ 
+                                TextBlock.text (sprintf "%s - %s" edu.School edu.Degree) ])
+                ) ]
+            TextBox.create [ 
+                TextBox.watermark "School"
+                TextBox.text school.Current
+                TextBox.onTextChanged (fun t -> school.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Degree"
+                TextBox.text degree.Current
+                TextBox.onTextChanged (fun t -> degree.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Area"
+                TextBox.text area.Current
+                TextBox.onTextChanged (fun t -> area.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Grade"
+                TextBox.text grade.Current
+                TextBox.onTextChanged (fun t -> grade.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Location"
+                TextBox.text location.Current
+                TextBox.onTextChanged (fun t -> location.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Period"
+                TextBox.text period.Current
+                TextBox.onTextChanged (fun t -> period.Set t) ]
+            TextBox.create [ 
+                TextBox.watermark "Website"
+                TextBox.text website.Current
+                TextBox.onTextChanged (fun t -> website.Set t) ]
+            StackPanel.create [ 
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.spacing 4.0
+                StackPanel.children [ 
+                    Button.create [ 
+                        Button.content "Add"
+                        Button.onClick (fun _ ->
+                                if not (String.IsNullOrWhiteSpace school.Current)
+                                then
+                                    let edu =
+                                        Education(
+                                            school.Current,
+                                            degree.Current,
+                                            area.Current,
+                                            grade.Current,
+                                            location.Current,
+                                            period.Current,
+                                            website.Current
+                                        )
+
+                                    educations.Current.Add edu
+                                    school.Set ""
+                                    degree.Set ""
+                                    area.Set ""
+                                    grade.Set ""
+                                    location.Set ""
+                                    period.Set ""
+                                    website.Set "") ]
+                    Button.create [ 
+                        Button.content "Update"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick (fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    let edu = educations.Current.[selectedIndex.Current]
+                                    edu.School <- school.Current
+                                    edu.Degree <- degree.Current
+                                    edu.Area <- area.Current
+                                    edu.Grade <- grade.Current
+                                    edu.Location <- location.Current
+                                    edu.Period <- period.Current
+                                    edu.Website <- website.Current
+                                    educations.Current.[selectedIndex.Current] <- edu
+                                    educations.Current |> ignore) ]
+                    Button.create [ 
+                        Button.content "Delete"
+                        Button.isEnabled (selectedIndex.Current >= 0)
+                        Button.onClick(fun _ ->
+                                if selectedIndex.Current >= 0
+                                then
+                                    educations.Current.RemoveAt selectedIndex.Current
+                                    selectedIndex.Set -1
+                                    school.Set ""
+                                    degree.Set ""
+                                    area.Set ""
+                                    grade.Set ""
+                                    location.Set ""
+                                    period.Set ""
+                                    website.Set "") ] ] ] ] ]    
+
 [<AbstractClass; Sealed>]
 type Views =
     static member main() =
@@ -778,1470 +1458,99 @@ type Views =
                                   [ ScrollViewer.create
                                         [ Grid.row 0
                                           ScrollViewer.content (
-                                              StackPanel.create
-                                                  [ StackPanel.orientation Orientation.Vertical
-                                                    StackPanel.spacing 4.0
-                                                    StackPanel.children
-                                                        [ // Picture Expander
-                                                          Expander.create
-                                                              [ Expander.header "Picture"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.verticalAlignment
-                                                                              VerticalAlignment.Center
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ Image.create
-                                                                                    [ Image.source imgSource
-                                                                                      Image.maxHeight 90.0
-                                                                                      Image.maxWidth 90.0 ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Image path"
-                                                                                      TextBox.height 30.0
-                                                                                      TextBox.text (
-                                                                                          pictureUriState.Current
-                                                                                          |> Option.map (fun u ->
-                                                                                              u.OriginalString)
-                                                                                          |> Option.defaultValue ""
-                                                                                      )
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          match tryMakeUri t with
-                                                                                          | Some u ->
-                                                                                              pictureUriState.Set(
-                                                                                                  Some u
-                                                                                              )
-                                                                                          | None ->
-                                                                                              pictureUriState.Set None) ]
-                                                                                Button.create
-                                                                                    [ Button.content "Choose picture"
-                                                                                      Button.horizontalAlignment HorizontalAlignment.Right
-                                                                                      Button.onClick (fun _ ->
-                                                                                          async {
-                                                                                              let! opt =
-                                                                                                  choosePicturePath ()
-
-                                                                                              opt
-                                                                                              |> Option.iter
-                                                                                                  (fun p ->
-                                                                                                      pictureUriState
-                                                                                                          .Set(
-                                                                                                              Some p
-                                                                                                          ))
-                                                                                          }
-                                                                                          |> Async.StartImmediate) ] ] ]
-                                                                ) ]
-
-                                                          // Basic Information Expander
-                                                          Expander.create
-                                                              [ Expander.header "Basic Information"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ TextBox.create
-                                                                                    [ TextBox.watermark "Name"
-                                                                                      TextBox.text nameState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          nameState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Headline"
-                                                                                      TextBox.text
-                                                                                          headlineState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          headlineState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Email"
-                                                                                      TextBox.text emailState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          emailState.Set t)
-                                                                                      if
-                                                                                          emailState.Current <> ""
-                                                                                          && not (
-                                                                                              emailRegex.IsMatch
-                                                                                                  emailState.Current
-                                                                                          )
-                                                                                      then
-                                                                                          TextBox.classes [ "invalid" ] ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Phone"
-                                                                                      TextBox.text phoneState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          phoneState.Set t)
-                                                                                      if
-                                                                                          phoneState.Current <> ""
-                                                                                          && not (
-                                                                                              phoneRegex.IsMatch
-                                                                                                  phoneState.Current
-                                                                                          )
-                                                                                      then
-                                                                                          TextBox.classes [ "invalid" ] ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Location"
-                                                                                      TextBox.text
-                                                                                          locationState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          locationState.Set t) ]
-                                                                                TextBlock.create
-                                                                                    [ TextBlock.text "Links:" ]
-                                                                                ListBox.create
-                                                                                    [ ListBox.dataItems
-                                                                                          linksState.Current
-                                                                                      ListBox.selectionMode
-                                                                                          SelectionMode.Single
-                                                                                      ListBox.selectedItem
-                                                                                          selectedLinkState.Current
-                                                                                      ListBox.onSelectedIndexChanged
-                                                                                          (fun index ->
-                                                                                              selectedLinkIndexState.Set
-                                                                                                  index)
-                                                                                      ListBox.onSelectedItemChanged
-                                                                                          (fun item ->
-                                                                                              newLinkState.Set(
-                                                                                                  item |> string
-                                                                                              )
-
-                                                                                              selectedLinkState.Set(
-                                                                                                  item |> string
-                                                                                              )) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "New link"
-                                                                                      TextBox.horizontalAlignment
-                                                                                          HorizontalAlignment.Stretch
-                                                                                      TextBox.text newLinkState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newLinkState.Set t)
-                                                                                      if
-                                                                                          newLinkState.Current <> ""
-                                                                                          && not (
-                                                                                              isValidUrl
-                                                                                                  newLinkState.Current
-                                                                                          )
-                                                                                      then
-                                                                                          TextBox.classes [ "invalid" ] ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.horizontalAlignment
-                                                                                          HorizontalAlignment.Right
-                                                                                      StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.spacing 4.0
-                                                                                      StackPanel.children
-                                                                                          [ Button.create
-                                                                                                [ Button.content "Add"
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              not (
-                                                                                                                  String.IsNullOrWhiteSpace
-                                                                                                                      newLinkState.Current
-                                                                                                              )
-                                                                                                              && isValidUrl
-                                                                                                                  newLinkState.Current
-                                                                                                              && linksState.Current.Contains
-                                                                                                                  newLinkState.Current
-                                                                                                                 |> not
-                                                                                                          then
-                                                                                                              linksState.Current.Add
-                                                                                                                  newLinkState.Current
-
-                                                                                                              newLinkState.Set
-                                                                                                                  "") ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Update"
-                                                                                                  Button.isEnabled (
-                                                                                                      not (
-                                                                                                          String.IsNullOrEmpty
-                                                                                                              selectedLinkState.Current
-                                                                                                      )
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              linksState.Current.Count > 0
-                                                                                                              && selectedLinkIndexState.Current
-                                                                                                                 >= 0
-                                                                                                          then
-                                                                                                              linksState.Current.[selectedLinkIndexState.Current] <-
-                                                                                                                  newLinkState.Current) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Delete"
-                                                                                                  Button.isEnabled (
-                                                                                                      not (
-                                                                                                          String.IsNullOrEmpty
-                                                                                                              selectedLinkState.Current
-                                                                                                      )
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              linksState.Current.Contains
-                                                                                                                  selectedLinkState.Current
-                                                                                                          then
-                                                                                                              if
-                                                                                                                  linksState.Current.Remove
-                                                                                                                      selectedLinkState.Current
-                                                                                                              then
-                                                                                                                  selectedLinkState.Set
-                                                                                                                      "") ] ] ]
-
-                                                                                ] ]
-                                                                ) ]
-
-                                                          // Summary Expander
-                                                          Expander.create
-                                                              [ Expander.header "Summary"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.content (
-                                                                    TextBox.create
-                                                                        [ TextBox.watermark "Summary (markdown)"
-                                                                          TextBox.text summaryState.Current
-                                                                          TextBox.onTextChanged (fun t ->
-                                                                              summaryState.Set t)
-                                                                          TextBox.acceptsReturn true
-                                                                          TextBox.height 150.0
-                                                                          TextBox.verticalScrollBarVisibility
-                                                                              ScrollBarVisibility.Auto
-                                                                          TextBox.horizontalScrollBarVisibility
-                                                                              ScrollBarVisibility.Auto ]
-                                                                ) ]
-
-                                                          // Experiences Expander
-                                                          Expander.create
-                                                              [ Expander.header "Experience"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.isExpanded false
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ ListBox.create
-                                                                                    [ ListBox.dataItems
-                                                                                          experiencesState.Current
-                                                                                      ListBox.selectionMode
-                                                                                          SelectionMode.Single
-                                                                                      ListBox.onSelectionChanged
-                                                                                          (fun args ->
-                                                                                              if
-                                                                                                  args.AddedItems.Count > 0
-                                                                                              then
-                                                                                                  let exp =
-                                                                                                      args.AddedItems.[0]
-                                                                                                      :?> Experience
-
-                                                                                                  selectedExpIndexState
-                                                                                                      .Set(
-                                                                                                          experiencesState.Current.IndexOf
-                                                                                                              exp
-                                                                                                      )
-
-                                                                                                  newExpCompanyState.Set
-                                                                                                      exp.Company
-
-                                                                                                  newExpPositionState.Set
-                                                                                                      exp.Position
-
-                                                                                                  newExpLocationState.Set
-                                                                                                      exp.Location
-
-                                                                                                  newExpPeriodState.Set
-                                                                                                      exp.Period
-
-                                                                                                  newExpDescriptionState.Set
-                                                                                                      exp.Description
-
-                                                                                                  newExpWebsiteState
-                                                                                                      .Set(
-                                                                                                          if
-                                                                                                              exp.Website
-                                                                                                              <> null
-                                                                                                          then
-                                                                                                              exp.Website.OriginalString
-                                                                                                          else
-                                                                                                              ""
-                                                                                                      )
-                                                                                              else
-                                                                                                  selectedExpIndexState.Set
-                                                                                                      -1
-
-                                                                                                  newExpCompanyState.Set
-                                                                                                      ""
-
-                                                                                                  newExpPositionState.Set
-                                                                                                      ""
-
-                                                                                                  newExpLocationState.Set
-                                                                                                      ""
-
-                                                                                                  newExpPeriodState.Set
-                                                                                                      ""
-
-                                                                                                  newExpDescriptionState.Set
-                                                                                                      ""
-
-                                                                                                  newExpWebsiteState.Set
-                                                                                                      "")
-                                                                                      ListBox.itemTemplate (
-                                                                                          DataTemplateView<_>.create
-                                                                                              (fun (exp: Experience) ->
-                                                                                                  TextBlock.create
-                                                                                                      [ TextBlock.text (
-                                                                                                            sprintf
-                                                                                                                "%s - %s"
-                                                                                                                exp.Company
-                                                                                                                exp.Position
-                                                                                                        ) ])
-                                                                                      ) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Company"
-                                                                                      TextBox.text
-                                                                                          newExpCompanyState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newExpCompanyState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Position"
-                                                                                      TextBox.text
-                                                                                          newExpPositionState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newExpPositionState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Location"
-                                                                                      TextBox.text
-                                                                                          newExpLocationState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newExpLocationState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Period"
-                                                                                      TextBox.text
-                                                                                          newExpPeriodState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newExpPeriodState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Website"
-                                                                                      TextBox.text
-                                                                                          newExpWebsiteState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newExpWebsiteState.Set t)
-                                                                                      if
-                                                                                          newExpWebsiteState.Current
-                                                                                          <> ""
-                                                                                          && not (
-                                                                                              isValidUrl
-                                                                                                  newExpWebsiteState.Current
-                                                                                          )
-                                                                                      then
-                                                                                          TextBox.classes [ "invalid" ] ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark
-                                                                                          "Description (markdown)"
-                                                                                      TextBox.text
-                                                                                          newExpDescriptionState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newExpDescriptionState.Set t)
-                                                                                      TextBox.acceptsReturn true
-                                                                                      TextBox.height 80.0
-                                                                                      TextBox.verticalScrollBarVisibility
-                                                                                          ScrollBarVisibility.Auto ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.horizontalAlignment
-                                                                                          HorizontalAlignment.Right
-                                                                                      StackPanel.spacing 4.0
-                                                                                      StackPanel.children
-                                                                                          [ Button.create
-                                                                                                [ Button.content "Add"
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              not (
-                                                                                                                  String.IsNullOrWhiteSpace
-                                                                                                                      newExpCompanyState.Current
-                                                                                                              )
-                                                                                                          then
-                                                                                                              let website =
-                                                                                                                  if
-                                                                                                                      String.IsNullOrWhiteSpace
-                                                                                                                          newExpWebsiteState.Current
-                                                                                                                  then
-                                                                                                                      null
-                                                                                                                  else
-                                                                                                                      Uri(
-                                                                                                                          newExpWebsiteState.Current
-                                                                                                                      )
-
-                                                                                                              let exp =
-                                                                                                                  Experience(
-                                                                                                                      newExpCompanyState.Current,
-                                                                                                                      website,
-                                                                                                                      newExpPositionState.Current,
-                                                                                                                      newExpLocationState.Current,
-                                                                                                                      newExpPeriodState.Current,
-                                                                                                                      newExpDescriptionState.Current
-                                                                                                                  )
-
-                                                                                                              experiencesState
-                                                                                                                  .Current
-                                                                                                                  .Add(
-                                                                                                                      exp
-                                                                                                                  )
-
-                                                                                                              newExpCompanyState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpPositionState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpLocationState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpPeriodState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpDescriptionState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpWebsiteState.Set
-                                                                                                                  "") ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Update"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedExpIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedExpIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              let exp =
-                                                                                                                  experiencesState.Current.[selectedExpIndexState.Current]
-
-                                                                                                              exp.Company <-
-                                                                                                                  newExpCompanyState.Current
-
-                                                                                                              exp.Position <-
-                                                                                                                  newExpPositionState.Current
-
-                                                                                                              exp.Location <-
-                                                                                                                  newExpLocationState.Current
-
-                                                                                                              exp.Period <-
-                                                                                                                  newExpPeriodState.Current
-
-                                                                                                              exp.Description <-
-                                                                                                                  newExpDescriptionState.Current
-
-                                                                                                              exp.Website <-
-                                                                                                                  if
-                                                                                                                      String.IsNullOrWhiteSpace
-                                                                                                                          newExpWebsiteState.Current
-                                                                                                                  then
-                                                                                                                      null
-                                                                                                                  else
-                                                                                                                      Uri
-                                                                                                                          newExpWebsiteState.Current
-
-                                                                                                              experiencesState.Current.[selectedExpIndexState.Current] <-
-                                                                                                                  exp
-
-                                                                                                              experiencesState.Current
-                                                                                                              |> ignore) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Delete"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedExpIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedExpIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              experiencesState.Current.RemoveAt
-                                                                                                                  selectedExpIndexState.Current
-
-                                                                                                              selectedExpIndexState.Set
-                                                                                                                  -1
-
-                                                                                                              newExpCompanyState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpPositionState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpLocationState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpPeriodState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpDescriptionState.Set
-                                                                                                                  ""
-
-                                                                                                              newExpWebsiteState.Set
-                                                                                                                  "") ] ] ] ] ]
-                                                                ) ]
-
-                                                          // Languages Expander
-                                                          Expander.create
-                                                              [ Expander.header "Languages"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.isExpanded false
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ ListBox.create
-                                                                                    [ ListBox.dataItems
-                                                                                          languagesState.Current
-                                                                                      ListBox.selectionMode
-                                                                                          SelectionMode.Single
-                                                                                      ListBox.onSelectionChanged
-                                                                                          (fun args ->
-                                                                                              if
-                                                                                                  args.AddedItems.Count > 0
-                                                                                              then
-                                                                                                  let lang =
-                                                                                                      args.AddedItems.[0]
-                                                                                                      :?> Language
-
-                                                                                                  selectedLangIndexState
-                                                                                                      .Set(
-                                                                                                          languagesState.Current.IndexOf
-                                                                                                              lang
-                                                                                                      )
-
-                                                                                                  newLangNameState.Set
-                                                                                                      lang.Name
-
-                                                                                                  newLangFluencyState.Set
-                                                                                                      lang.Fluency
-
-                                                                                                  newLangLevelState.Set
-                                                                                                      lang.Level
-                                                                                              else
-                                                                                                  selectedLangIndexState.Set
-                                                                                                      -1
-
-                                                                                                  newLangNameState.Set
-                                                                                                      ""
-
-                                                                                                  newLangFluencyState.Set
-                                                                                                      ""
-
-                                                                                                  newLangLevelState.Set
-                                                                                                      0)
-                                                                                      ListBox.itemTemplate (
-                                                                                          DataTemplateView<_>.create
-                                                                                              (fun (lang: Language) ->
-                                                                                                  TextBlock.create
-                                                                                                      [ TextBlock.text (
-                                                                                                            sprintf
-                                                                                                                "%s - %s"
-                                                                                                                lang.Name
-                                                                                                                lang.Fluency
-                                                                                                        ) ])
-                                                                                      ) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Language name"
-                                                                                      TextBox.text
-                                                                                          newLangNameState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newLangNameState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Fluency"
-                                                                                      TextBox.text
-                                                                                          newLangFluencyState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newLangFluencyState.Set t) ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.children
-                                                                                          [ TextBlock.create
-                                                                                                [ TextBlock.text
-                                                                                                      "Level: " ]
-                                                                                            Slider.create
-                                                                                                [ Slider.minimum 0.0
-                                                                                                  Slider.maximum 5.0
-                                                                                                  Slider.tickFrequency
-                                                                                                      1.0
-                                                                                                  Slider.tickPlacement
-                                                                                                      TickPlacement.Outside
-                                                                                                  Slider.value (
-                                                                                                      float
-                                                                                                          newLangLevelState.Current
-                                                                                                  )
-                                                                                                  Slider.onValueChanged
-                                                                                                      (fun v ->
-                                                                                                          newLangLevelState
-                                                                                                              .Set(
-                                                                                                                  int
-                                                                                                                      v
-                                                                                                              ))
-                                                                                                  Slider.width 200.0 ]
-                                                                                            TextBlock.create
-                                                                                                [ TextBlock.text (
-                                                                                                      string
-                                                                                                          newLangLevelState.Current
-                                                                                                  ) ] ] ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.horizontalAlignment
-                                                                                          HorizontalAlignment.Right
-                                                                                      StackPanel.spacing 4.0
-                                                                                      StackPanel.children
-                                                                                          [ Button.create
-                                                                                                [ Button.content "Add"
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              not (
-                                                                                                                  String.IsNullOrWhiteSpace
-                                                                                                                      newLangNameState.Current
-                                                                                                              )
-                                                                                                          then
-                                                                                                              let lang =
-                                                                                                                  Language(
-                                                                                                                      newLangNameState.Current,
-                                                                                                                      newLangFluencyState.Current,
-                                                                                                                      newLangLevelState.Current
-                                                                                                                  )
-
-                                                                                                              languagesState.Current.Add
-                                                                                                                  lang
-
-                                                                                                              newLangNameState.Set
-                                                                                                                  ""
-
-                                                                                                              newLangFluencyState.Set
-                                                                                                                  ""
-
-                                                                                                              newLangLevelState.Set
-                                                                                                                  0) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Update"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedLangIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedLangIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              let lang =
-                                                                                                                  languagesState.Current.[selectedLangIndexState.Current]
-
-                                                                                                              lang.Name <-
-                                                                                                                  newLangNameState.Current
-
-                                                                                                              lang.Fluency <-
-                                                                                                                  newLangFluencyState.Current
-
-                                                                                                              lang.Level <-
-                                                                                                                  newLangLevelState.Current
-
-                                                                                                              languagesState.Current.[selectedLangIndexState.Current] <-
-                                                                                                                  lang
-
-                                                                                                              languagesState.Current
-                                                                                                              |> ignore) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Delete"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedLangIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedLangIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              languagesState.Current.RemoveAt
-                                                                                                                  selectedLangIndexState.Current
-
-                                                                                                              selectedLangIndexState.Set
-                                                                                                                  -1
-
-                                                                                                              newLangNameState.Set
-                                                                                                                  ""
-
-                                                                                                              newLangFluencyState.Set
-                                                                                                                  ""
-
-                                                                                                              newLangLevelState.Set
-                                                                                                                  0) ] ] ] ] ]
-                                                                ) ]
-
-                                                          // Skills Expander
-                                                          Expander.create
-                                                              [ Expander.header "Skills"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.isExpanded false
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ ListBox.create
-                                                                                    [ ListBox.dataItems
-                                                                                          skillsState.Current
-                                                                                      ListBox.selectionMode
-                                                                                          SelectionMode.Single
-                                                                                      ListBox.onSelectionChanged
-                                                                                          (fun args ->
-                                                                                              if
-                                                                                                  args.AddedItems.Count > 0
-                                                                                              then
-                                                                                                  let skill =
-                                                                                                      args.AddedItems.[0]
-                                                                                                      :?> Skill
-
-                                                                                                  selectedSkillIndexState
-                                                                                                      .Set(
-                                                                                                          skillsState.Current.IndexOf
-                                                                                                              skill
-                                                                                                      )
-
-                                                                                                  newSkillNameState.Set
-                                                                                                      skill.Name
-
-                                                                                                  newSkillKeywordsState
-                                                                                                      .Set(
-                                                                                                          String.Join(
-                                                                                                              ", ",
-                                                                                                              skill.Keywords
-                                                                                                          )
-                                                                                                      )
-                                                                                              else
-                                                                                                  selectedSkillIndexState.Set
-                                                                                                      -1
-
-                                                                                                  newSkillNameState.Set
-                                                                                                      ""
-
-                                                                                                  newSkillKeywordsState.Set
-                                                                                                      "")
-                                                                                      ListBox.itemTemplate (
-                                                                                          DataTemplateView<_>.create
-                                                                                              (fun (skill: Skill) ->
-                                                                                                  TextBlock.create
-                                                                                                      [ TextBlock.text
-                                                                                                            skill.Name ])
-                                                                                      ) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Skill name"
-                                                                                      TextBox.text
-                                                                                          newSkillNameState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newSkillNameState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark
-                                                                                          "Keywords (comma separated)"
-                                                                                      TextBox.text
-                                                                                          newSkillKeywordsState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newSkillKeywordsState.Set t) ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.horizontalAlignment
-                                                                                          HorizontalAlignment.Right
-                                                                                      StackPanel.spacing 4.0
-                                                                                      StackPanel.children
-                                                                                          [ Button.create
-                                                                                                [ Button.content "Add"
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              not (
-                                                                                                                  String.IsNullOrWhiteSpace
-                                                                                                                      newSkillNameState.Current
-                                                                                                              )
-                                                                                                          then
-                                                                                                              let keywords =
-                                                                                                                  if
-                                                                                                                      String.IsNullOrWhiteSpace
-                                                                                                                          newSkillKeywordsState.Current
-                                                                                                                  then
-                                                                                                                      []
-                                                                                                                  else
-                                                                                                                      newSkillKeywordsState
-                                                                                                                          .Current
-                                                                                                                          .Split(
-                                                                                                                              [| ','
-                                                                                                                                 ';' |],
-                                                                                                                              StringSplitOptions.RemoveEmptyEntries
-                                                                                                                          )
-                                                                                                                      |> Array.toList
-
-                                                                                                              let skill =
-                                                                                                                  Skill(
-                                                                                                                      newSkillNameState.Current,
-                                                                                                                      keywords
-                                                                                                                  )
-
-                                                                                                              skillsState.Current.Add
-                                                                                                                  skill
-
-                                                                                                              newSkillNameState.Set
-                                                                                                                  ""
-
-                                                                                                              newSkillKeywordsState.Set
-                                                                                                                  "") ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Update"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedSkillIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedSkillIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              let skill =
-                                                                                                                  skillsState.Current.[selectedSkillIndexState.Current]
-
-                                                                                                              skill.Name <-
-                                                                                                                  newSkillNameState.Current
-
-                                                                                                              skill.Keywords <-
-                                                                                                                  if
-                                                                                                                      String.IsNullOrWhiteSpace
-                                                                                                                          newSkillKeywordsState.Current
-                                                                                                                  then
-                                                                                                                      []
-                                                                                                                  else
-                                                                                                                      newSkillKeywordsState
-                                                                                                                          .Current
-                                                                                                                          .Split(
-                                                                                                                              [| ','
-                                                                                                                                 ';' |],
-                                                                                                                              StringSplitOptions.RemoveEmptyEntries
-                                                                                                                          )
-                                                                                                                      |> Array.toList
-
-                                                                                                              skillsState.Current.[selectedSkillIndexState.Current] <-
-                                                                                                                  skill
-
-                                                                                                              skillsState.Current
-                                                                                                              |> ignore) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Delete"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedSkillIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedSkillIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              skillsState.Current.RemoveAt
-                                                                                                                  selectedSkillIndexState.Current
-
-                                                                                                              selectedSkillIndexState.Set
-                                                                                                                  -1
-
-                                                                                                              newSkillNameState.Set
-                                                                                                                  ""
-
-                                                                                                              newSkillKeywordsState.Set
-                                                                                                                  "") ] ] ] ] ]
-                                                                ) ]
-
-                                                          // Certifications Expander
-                                                          Expander.create
-                                                              [ Expander.header "Certifications"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.isExpanded false
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ ListBox.create
-                                                                                    [ ListBox.dataItems
-                                                                                          certificationsState.Current
-                                                                                      ListBox.selectionMode
-                                                                                          SelectionMode.Single
-                                                                                      ListBox.onSelectionChanged
-                                                                                          (fun args ->
-                                                                                              if
-                                                                                                  args.AddedItems.Count > 0
-                                                                                              then
-                                                                                                  let cert =
-                                                                                                      args.AddedItems.[0]
-                                                                                                      :?> Certification
-
-                                                                                                  selectedCertIndexState
-                                                                                                      .Set(
-                                                                                                          certificationsState.Current.IndexOf
-                                                                                                              cert
-                                                                                                      )
-
-                                                                                                  newCertTitleState.Set
-                                                                                                      cert.Title
-
-                                                                                                  newCertIssuerState.Set
-                                                                                                      cert.Issuer
-
-                                                                                                  newCertDateState.Set
-                                                                                                      cert.Date
-
-                                                                                                  newCertLabelState.Set
-                                                                                                      cert.Label
-
-                                                                                                  newCertWebsiteState
-                                                                                                      .Set(
-                                                                                                          if
-                                                                                                              cert.Website
-                                                                                                              <> null
-                                                                                                          then
-                                                                                                              cert.Website.OriginalString
-                                                                                                          else
-                                                                                                              ""
-                                                                                                      )
-                                                                                              else
-                                                                                                  selectedCertIndexState.Set
-                                                                                                      -1
-
-                                                                                                  newCertTitleState.Set
-                                                                                                      ""
-
-                                                                                                  newCertIssuerState.Set
-                                                                                                      ""
-
-                                                                                                  newCertDateState.Set
-                                                                                                      ""
-
-                                                                                                  newCertLabelState.Set
-                                                                                                      ""
-
-                                                                                                  newCertWebsiteState.Set
-                                                                                                      "")
-                                                                                      ListBox.itemTemplate (
-                                                                                          DataTemplateView<_>.create
-                                                                                              (fun
-                                                                                                  (cert: Certification) ->
-                                                                                                  TextBlock.create
-                                                                                                      [ TextBlock.text (
-                                                                                                            sprintf
-                                                                                                                "%s - %s"
-                                                                                                                cert.Title
-                                                                                                                cert.Issuer
-                                                                                                        ) ])
-                                                                                      ) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Title"
-                                                                                      TextBox.text
-                                                                                          newCertTitleState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newCertTitleState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Issuer"
-                                                                                      TextBox.text
-                                                                                          newCertIssuerState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newCertIssuerState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Date"
-                                                                                      TextBox.text
-                                                                                          newCertDateState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newCertDateState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Label"
-                                                                                      TextBox.text
-                                                                                          newCertLabelState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newCertLabelState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Website"
-                                                                                      TextBox.text
-                                                                                          newCertWebsiteState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newCertWebsiteState.Set t)
-                                                                                      if
-                                                                                          newCertWebsiteState.Current
-                                                                                          <> ""
-                                                                                          && not (
-                                                                                              isValidUrl
-                                                                                                  newCertWebsiteState.Current
-                                                                                          )
-                                                                                      then
-                                                                                          TextBox.classes [ "invalid" ] ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.horizontalAlignment
-                                                                                          HorizontalAlignment.Right
-                                                                                      StackPanel.spacing 4.0
-                                                                                      StackPanel.children
-                                                                                          [ Button.create
-                                                                                                [ Button.content "Add"
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              not (
-                                                                                                                  String.IsNullOrWhiteSpace
-                                                                                                                      newCertTitleState.Current
-                                                                                                              )
-                                                                                                          then
-                                                                                                              let website =
-                                                                                                                  if
-                                                                                                                      String.IsNullOrWhiteSpace
-                                                                                                                          newCertWebsiteState.Current
-                                                                                                                  then
-                                                                                                                      null
-                                                                                                                  else
-                                                                                                                      Uri
-                                                                                                                          newCertWebsiteState.Current
-
-                                                                                                              let cert =
-                                                                                                                  Certification(
-                                                                                                                      newCertTitleState.Current,
-                                                                                                                      newCertIssuerState.Current,
-                                                                                                                      newCertDateState.Current,
-                                                                                                                      newCertLabelState.Current,
-                                                                                                                      website
-                                                                                                                  )
-
-                                                                                                              certificationsState.Current.Add
-                                                                                                                  cert
-
-                                                                                                              newCertTitleState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertIssuerState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertDateState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertLabelState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertWebsiteState.Set
-                                                                                                                  "") ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Update"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedCertIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedCertIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              let cert =
-                                                                                                                  certificationsState.Current.[selectedCertIndexState.Current]
-
-                                                                                                              cert.Title <-
-                                                                                                                  newCertTitleState.Current
-
-                                                                                                              cert.Issuer <-
-                                                                                                                  newCertIssuerState.Current
-
-                                                                                                              cert.Date <-
-                                                                                                                  newCertDateState.Current
-
-                                                                                                              cert.Label <-
-                                                                                                                  newCertLabelState.Current
-
-                                                                                                              cert.Website <-
-                                                                                                                  if
-                                                                                                                      String.IsNullOrWhiteSpace
-                                                                                                                          newCertWebsiteState.Current
-                                                                                                                  then
-                                                                                                                      null
-                                                                                                                  else
-                                                                                                                      Uri
-                                                                                                                          newCertWebsiteState.Current
-
-                                                                                                              certificationsState.Current.[selectedCertIndexState.Current] <-
-                                                                                                                  cert
-
-                                                                                                              certificationsState.Current
-                                                                                                              |> ignore) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Delete"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedCertIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedCertIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              certificationsState.Current.RemoveAt
-                                                                                                                  selectedCertIndexState.Current
-
-                                                                                                              selectedCertIndexState.Set
-                                                                                                                  -1
-
-                                                                                                              newCertTitleState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertIssuerState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertDateState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertLabelState.Set
-                                                                                                                  ""
-
-                                                                                                              newCertWebsiteState.Set
-                                                                                                                  "") ] ] ] ] ]
-                                                                ) ]
-
-                                                          // Education Expander
-                                                          Expander.create
-                                                              [ Expander.header "Education"
-                                                                Expander.horizontalAlignment
-                                                                    HorizontalAlignment.Stretch
-                                                                Expander.isExpanded false
-                                                                Expander.content (
-                                                                    StackPanel.create
-                                                                        [ StackPanel.orientation Orientation.Vertical
-                                                                          StackPanel.spacing 2.0
-                                                                          StackPanel.children
-                                                                              [ ListBox.create
-                                                                                    [ ListBox.dataItems
-                                                                                          educationsState.Current
-                                                                                      ListBox.selectionMode
-                                                                                          SelectionMode.Single
-                                                                                      ListBox.onSelectionChanged
-                                                                                          (fun args ->
-                                                                                              if
-                                                                                                  args.AddedItems.Count > 0
-                                                                                              then
-                                                                                                  let edu =
-                                                                                                      args.AddedItems.[0]
-                                                                                                      :?> Education
-
-                                                                                                  selectedEduIndexState
-                                                                                                      .Set(
-                                                                                                          educationsState.Current.IndexOf
-                                                                                                              edu
-                                                                                                      )
-
-                                                                                                  newEduSchoolState.Set
-                                                                                                      edu.School
-
-                                                                                                  newEduDegreeState.Set
-                                                                                                      edu.Degree
-
-                                                                                                  newEduAreaState.Set
-                                                                                                      edu.Area
-
-                                                                                                  newEduGradeState.Set
-                                                                                                      edu.Grade
-
-                                                                                                  newEduLocationState.Set
-                                                                                                      edu.Location
-
-                                                                                                  newEduPeriodState.Set
-                                                                                                      edu.Period
-
-                                                                                                  newEduWebsiteState.Set
-                                                                                                      edu.Website
-                                                                                              else
-                                                                                                  selectedEduIndexState.Set
-                                                                                                      -1
-
-                                                                                                  newEduSchoolState.Set
-                                                                                                      ""
-
-                                                                                                  newEduDegreeState.Set
-                                                                                                      ""
-
-                                                                                                  newEduAreaState.Set
-                                                                                                      ""
-
-                                                                                                  newEduGradeState.Set
-                                                                                                      ""
-
-                                                                                                  newEduLocationState.Set
-                                                                                                      ""
-
-                                                                                                  newEduPeriodState.Set
-                                                                                                      ""
-
-                                                                                                  newEduWebsiteState.Set
-                                                                                                      "")
-                                                                                      ListBox.itemTemplate (
-                                                                                          DataTemplateView<_>.create
-                                                                                              (fun (edu: Education) ->
-                                                                                                  TextBlock.create
-                                                                                                      [ TextBlock.text (
-                                                                                                            sprintf
-                                                                                                                "%s - %s"
-                                                                                                                edu.School
-                                                                                                                edu.Degree
-                                                                                                        ) ])
-                                                                                      ) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "School"
-                                                                                      TextBox.text
-                                                                                          newEduSchoolState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduSchoolState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Degree"
-                                                                                      TextBox.text
-                                                                                          newEduDegreeState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduDegreeState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Area"
-                                                                                      TextBox.text
-                                                                                          newEduAreaState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduAreaState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Grade"
-                                                                                      TextBox.text
-                                                                                          newEduGradeState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduGradeState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Location"
-                                                                                      TextBox.text
-                                                                                          newEduLocationState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduLocationState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Period"
-                                                                                      TextBox.text
-                                                                                          newEduPeriodState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduPeriodState.Set t) ]
-                                                                                TextBox.create
-                                                                                    [ TextBox.watermark "Website"
-                                                                                      TextBox.text
-                                                                                          newEduWebsiteState.Current
-                                                                                      TextBox.onTextChanged (fun t ->
-                                                                                          newEduWebsiteState.Set t) ]
-                                                                                StackPanel.create
-                                                                                    [ StackPanel.orientation
-                                                                                          Orientation.Horizontal
-                                                                                      StackPanel.horizontalAlignment
-                                                                                          HorizontalAlignment.Right
-                                                                                      StackPanel.spacing 4.0
-                                                                                      StackPanel.children
-                                                                                          [ Button.create
-                                                                                                [ Button.content "Add"
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              not (
-                                                                                                                  String.IsNullOrWhiteSpace
-                                                                                                                      newEduSchoolState.Current
-                                                                                                              )
-                                                                                                          then
-                                                                                                              let edu =
-                                                                                                                  Education(
-                                                                                                                      newEduSchoolState.Current,
-                                                                                                                      newEduDegreeState.Current,
-                                                                                                                      newEduAreaState.Current,
-                                                                                                                      newEduGradeState.Current,
-                                                                                                                      newEduLocationState.Current,
-                                                                                                                      newEduPeriodState.Current,
-                                                                                                                      newEduWebsiteState.Current
-                                                                                                                  )
-
-                                                                                                              educationsState.Current.Add
-                                                                                                                  edu
-
-                                                                                                              newEduSchoolState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduDegreeState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduAreaState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduGradeState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduLocationState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduPeriodState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduWebsiteState.Set
-                                                                                                                  "") ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Update"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedEduIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedEduIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              let edu =
-                                                                                                                  educationsState.Current.[selectedEduIndexState.Current]
-
-                                                                                                              edu.School <-
-                                                                                                                  newEduSchoolState.Current
-
-                                                                                                              edu.Degree <-
-                                                                                                                  newEduDegreeState.Current
-
-                                                                                                              edu.Area <-
-                                                                                                                  newEduAreaState.Current
-
-                                                                                                              edu.Grade <-
-                                                                                                                  newEduGradeState.Current
-
-                                                                                                              edu.Location <-
-                                                                                                                  newEduLocationState.Current
-
-                                                                                                              edu.Period <-
-                                                                                                                  newEduPeriodState.Current
-
-                                                                                                              edu.Website <-
-                                                                                                                  newEduWebsiteState.Current
-
-                                                                                                              educationsState.Current.[selectedEduIndexState.Current] <-
-                                                                                                                  edu
-
-                                                                                                              educationsState.Current
-                                                                                                              |> ignore) ]
-                                                                                            Button.create
-                                                                                                [ Button.content
-                                                                                                      "Delete"
-                                                                                                  Button.isEnabled (
-                                                                                                      selectedEduIndexState.Current
-                                                                                                      >= 0
-                                                                                                  )
-                                                                                                  Button.onClick
-                                                                                                      (fun _ ->
-                                                                                                          if
-                                                                                                              selectedEduIndexState.Current
-                                                                                                              >= 0
-                                                                                                          then
-                                                                                                              educationsState.Current.RemoveAt
-                                                                                                                  selectedEduIndexState.Current
-
-                                                                                                              selectedEduIndexState.Set
-                                                                                                                  -1
-
-                                                                                                              newEduSchoolState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduDegreeState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduAreaState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduGradeState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduLocationState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduPeriodState.Set
-                                                                                                                  ""
-
-                                                                                                              newEduWebsiteState.Set
-                                                                                                                  "") ] ] ] ] ]
-                                                                ) ] ] ]
-                                          ) ]
+                                            TabControl.create
+                                                [
+                                                TabControl.tabStripPlacement Dock.Left
+                                                TabControl.viewItems [
+                                                    TabItem.create [
+                                                            TabItem.header "Picture"
+                                                            TabItem.content (pictureTabConent(imgSource, pictureUriState))]
+                                                    TabItem.create [
+                                                            TabItem.header "Basic Info"
+                                                            TabItem.content (basicInfoTabContent(nameState, headlineState, 
+                                                                emailState, phoneState, locationState, linksState,
+                                                                selectedLinkState, newLinkState, selectedLinkIndexState))]
+                                                    TabItem.create [
+                                                            TabItem.header "Summary"
+                                                            TabItem.content (summaryTabContent summaryState)]
+                                                    TabItem.create [
+                                                            TabItem.header "Experience"
+                                                            TabItem.content (experienceTabContent(experiencesState, selectedExpIndexState, 
+                                                                newExpCompanyState, newExpPositionState, newExpLocationState, newExpPeriodState, 
+                                                                newExpDescriptionState,newExpWebsiteState))]
+                                                    TabItem.create [
+                                                            TabItem.header "Languages"
+                                                            TabItem.content (languagesTabContent(languagesState, selectedLangIndexState, 
+                                                                newLangNameState, newLangFluencyState, newLangLevelState))]
+                                                    TabItem.create [
+                                                            TabItem.header "Skills"
+                                                            TabItem.content (skillsTabContent(skillsState, selectedSkillIndexState, 
+                                                                newSkillNameState, newSkillKeywordsState))]
+                                                    TabItem.create [
+                                                            TabItem.header "Cerifications"
+                                                            TabItem.content (cerificationsTabContent(certificationsState, selectedCertIndexState, 
+                                                                newCertTitleState, newCertIssuerState, newCertDateState, newCertLabelState, newCertWebsiteState))]
+                                                    TabItem.create [
+                                                            TabItem.header "Education"
+                                                            TabItem.content (educationTabContent(educationsState, selectedEduIndexState, newEduSchoolState, 
+                                                                newEduDegreeState, newEduAreaState, newEduGradeState, newEduLocationState, newEduPeriodState, newEduWebsiteState))]                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+                                                ] ] ) ]
 
                                     // bottom controls
-                                    StackPanel.create
-                                        [ Grid.row 1
-                                          StackPanel.orientation Orientation.Horizontal
-                                          StackPanel.horizontalAlignment HorizontalAlignment.Right
-                                          StackPanel.verticalAlignment VerticalAlignment.Bottom
-                                          StackPanel.children
-                                              [ ComboBox.create
-                                                    [ ComboBox.dataItems xsltFilesState.Current
-                                                      ComboBox.selectedIndex selectedXsltIndexState.Current
-                                                      ComboBox.onSelectedIndexChanged (fun index ->
-                                                          selectedXsltIndexState.Set index
-
-                                                          index |> xsltFilesState.Current.GetValue :?> XsltFile
-                                                          |> Some
-                                                          |> selectedXsltState.Set)
-                                                      ComboBox.itemTemplate (
-                                                          DataTemplateView<_>.create (fun (f: XsltFile) ->
-                                                              TextBlock.create [ TextBlock.text f.Name ])
-                                                      ) ]
-                                                Button.create
-                                                    [ Button.content "Load from XML"
-                                                      Button.onClick (fun _ -> loadFromXml states) ]
-                                                DropDownButton.create
-                                                    [ DropDownButton.content "Save As"
-                                                      DropDownButton.flyout (
-                                                          MenuFlyout.create
-                                                              [ MenuFlyout.placement
-                                                                    PlacementMode.BottomEdgeAlignedRight
-                                                                MenuFlyout.viewItems
-                                                                    [ MenuItem.create
-                                                                          [ MenuItem.header "XML"
-                                                                            MenuItem.onClick (fun _ ->
-                                                                                startGenerateResume Xml) ]
-                                                                      MenuItem.create
-                                                                          [ MenuItem.header "HTML"
-                                                                            MenuItem.isEnabled
-                                                                                selectedXsltState.Current.IsSome
-                                                                            MenuItem.onClick (fun _ ->
-                                                                                startGenerateResume Html) ]
-                                                                      MenuItem.create
-                                                                          [ MenuItem.header "PDF"
-                                                                            MenuItem.isEnabled
-                                                                                selectedXsltState.Current.IsSome
-                                                                            MenuItem.onClick (fun _ ->
-                                                                                startGenerateResume Pdf) ] ] ]
-                                                      ) ] ] ] ] ] ] ])
-
+                                    Border.create [
+                                        Grid.row 1
+                                        Border.borderBrush "Gray"
+                                        Border.borderThickness(0.0, 1.0, 0.0, 0.0)
+                                        Border.child (
+                                            StackPanel.create [
+                                                StackPanel.orientation  Orientation.Horizontal
+                                                StackPanel.orientation Orientation.Horizontal
+                                                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                                                StackPanel.verticalAlignment VerticalAlignment.Bottom
+                                                StackPanel.classes ["tabContent"]  
+                                                StackPanel.children [
+                                                    ComboBox.create [
+                                                        ComboBox.dataItems xsltFilesState.Current
+                                                        ComboBox.selectedIndex selectedXsltIndexState.Current
+                                                        ComboBox.onSelectedIndexChanged (fun index ->
+                                                            selectedXsltIndexState.Set index
+                                                            index |> xsltFilesState.Current.GetValue :?> XsltFile
+                                                            |> Some
+                                                            |> selectedXsltState.Set)
+                                                        ComboBox.itemTemplate (
+                                                            DataTemplateView<_>.create (fun (f: XsltFile) ->
+                                                                TextBlock.create [ TextBlock.text f.Name ])
+                                                        )                                                                                                                 
+                                                    ]
+                                                    Button.create [
+                                                        Button.content "Load from XML"
+                                                        Button.onClick (fun _ -> loadFromXml states)
+                                                    ]
+                                                    DropDownButton.create [
+                                                        DropDownButton.content "Save As"
+                                                        DropDownButton.flyout (
+                                                          MenuFlyout.create [ 
+                                                            MenuFlyout.placement PlacementMode.BottomEdgeAlignedRight
+                                                            MenuFlyout.viewItems [
+                                                                MenuItem.create [ 
+                                                                    MenuItem.header "XML"
+                                                                    MenuItem.onClick (fun _ -> startGenerateResume Xml) ]
+                                                                MenuItem.create [ 
+                                                                    MenuItem.header "HTML"
+                                                                    MenuItem.isEnabled selectedXsltState.Current.IsSome
+                                                                    MenuItem.onClick (fun _ -> startGenerateResume Html) ]
+                                                                MenuItem.create [ 
+                                                                    MenuItem.header "PDF"
+                                                                    MenuItem.isEnabled selectedXsltState.Current.IsSome
+                                                                    MenuItem.onClick (fun _ -> startGenerateResume Pdf) ] 
+                                                            ] ]                                                            
+                                                        )
+                                                    ]
+                                                ]                                              
+                                            ]                                            
+                                        )]
+                                    ]
+                                ] ] ] )
 
 type MainWindow() as this =
     inherit HostWindow()
@@ -2250,7 +1559,13 @@ type MainWindow() as this =
         let invalidTextBoxStyle =
             let style = Style(fun x -> x.OfType<TextBox>().Class "invalid")
             style.Setters.Add(Setter(TextBox.BorderBrushProperty, Brushes.Red))
-            style :> IStyle
+            style :> IStyle    
+            
+        let tabContent =
+            let style = Style(fun x -> x.OfType<StackPanel>().Class "tabContent")
+            style.Setters.Add(Setter(StackPanel.SpacingProperty, 4.0))
+            style.Setters.Add(Setter(StackPanel.MarginProperty, Thickness.Parse "10.0"))
+            style :> IStyle              
 
         base.Title <- "Resume Generator"
         base.Width <- 800.0
@@ -2259,6 +1574,7 @@ type MainWindow() as this =
         base.Icon <- new WindowIcon(new Bitmap(Path.Combine(getCurrentDirectory, "favicon.ico")))
 #endif        
         base.Styles.Add invalidTextBoxStyle
+        base.Styles.Add tabContent
         this.Content <- Views.main ()
 
 

@@ -48,6 +48,10 @@
                         width: 100%;
                     }
 
+                    a {
+                        color: #475569;
+                    }	                    
+
                     /* Header */
                     .page-header {
                         background: var(--primary-color);

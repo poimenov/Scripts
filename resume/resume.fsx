@@ -2,6 +2,7 @@
 #r "nuget: Avalonia.Desktop"
 #r "nuget: Avalonia.Themes.Fluent"
 #r "nuget: Avalonia.FuncUI"
+#r "nuget: MessageBox.Avalonia"
 #r "nuget: PuppeteerSharp"
 #r "nuget: Markdig"
 #endif
@@ -27,6 +28,8 @@ open Avalonia.Styling
 open PuppeteerSharp
 open PuppeteerSharp.Media
 open Markdig
+open MsBox.Avalonia
+open MsBox.Avalonia.Enums
 
 type GenerateToFormat =
     | Pdf
@@ -107,6 +110,15 @@ let getMainWindow () =
     match Application.Current.ApplicationLifetime with
     | :? ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime as desktop -> desktop.MainWindow
     | _ -> null
+
+let showErrorMsgBoxAsync(text: string) =
+    async {
+        let box = 
+            MessageBoxManager.GetMessageBoxStandard("Error", 
+                text, 
+                ButtonEnum.Ok, Icon.Error)  
+        return box.ShowAsync()
+    }
 
 let choosePicturePath () =
     async {
@@ -287,22 +299,11 @@ let getCertificationsXml (certifications: ObservableCollection<Certification>) =
         ))
     |> Seq.toArray
 
-let getXmlDoc
-    (
-        picturePath: string,
-        name: string,
-        headline: string,
-        email: string,
-        phone: string,
-        location: string,
-        links: ObservableCollection<string>,
-        summary: string,
-        experiences: ObservableCollection<Experience>,
-        languages: ObservableCollection<Language>,
-        skills: ObservableCollection<Skill>,
-        certifications: ObservableCollection<Certification>,
-        educations: ObservableCollection<Education>
-    ) =
+let getXmlDoc(picturePath: string, name: string, headline: string, email: string,
+    phone: string, location: string, links: ObservableCollection<string>, summary: string,
+    experiences: ObservableCollection<Experience>, languages: ObservableCollection<Language>,
+    skills: ObservableCollection<Skill>, certifications: ObservableCollection<Certification>,
+    educations: ObservableCollection<Education>) =
     let embedPicture (path: string) : string =
         if String.IsNullOrWhiteSpace path then
             ""
@@ -370,14 +371,19 @@ let getXmlDoc
     doc
 
 let transformXmlToHtml (doc: XDocument, xsltPath: string) =
-    let args = new XsltArgumentList()
-    args.AddExtensionObject("urn:ExtObj", new MdTransform())
-    let xslt = new XslCompiledTransform()
-    xslt.Load xsltPath
-    use stringWriter = new StringWriter()
-    use docReader = doc.CreateReader()
-    xslt.Transform(docReader, args, stringWriter)
-    stringWriter.ToString()
+    try
+        let args = new XsltArgumentList()
+        args.AddExtensionObject("urn:ExtObj", new MdTransform())
+        let xslt = new XslCompiledTransform()
+        xslt.Load xsltPath
+        use stringWriter = new StringWriter()
+        use docReader = doc.CreateReader()
+        xslt.Transform(docReader, args, stringWriter)
+        Some (stringWriter.ToString())
+    with ex ->
+        showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}" 
+        |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
+        None      
 
 let generatePdfFromHtml (htmlContent: string, outputPath: string) =
     task {
@@ -594,7 +600,8 @@ let loadFromXml (states: LoadStates) =
                         )
 
             with ex ->
-                printfn "Failed to load XML '%s': %s" path ex.Message
+                let! result = showErrorMsgBoxAsync $"Failed to load XML '{path}': {ex.Message}"
+                result |> ignore
         | None -> ()
     }
     |> Async.StartImmediate
@@ -602,8 +609,7 @@ let loadFromXml (states: LoadStates) =
 let pictureTabConent (imgSource: Bitmap, pictureUriState: IWritable<option<Uri>>) =
     StackPanel.create [ 
             StackPanel.orientation Orientation.Vertical
-            StackPanel.verticalAlignment VerticalAlignment.Top
-            StackPanel.classes ["tabContent"]
+            StackPanel.verticalAlignment VerticalAlignment.Top            
             StackPanel.children [
                 Image.create [Image.source imgSource;Image.maxHeight 120.0;Image.maxWidth 120.0 ]
                 TextBox.create [ 
@@ -635,7 +641,6 @@ let basicInfoTabContent (name: IWritable<string>,
     newLink: IWritable<string>, selectedLinkIndex: IWritable<int>) =
     StackPanel.create [
         StackPanel.orientation Orientation.Vertical
-        StackPanel.classes ["tabContent"]
         StackPanel.children [
             TextBox.create [ 
                 TextBox.watermark "Name"
@@ -681,10 +686,10 @@ let basicInfoTabContent (name: IWritable<string>,
             StackPanel.create [ 
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
                 StackPanel.orientation Orientation.Horizontal
-                StackPanel.spacing 4.0
                 StackPanel.children [ 
                     Button.create [ 
                         Button.content "Add"
+                        StackPanel.classes ["standart"]
                         Button.onClick (fun _ ->
                                 if not ( String.IsNullOrWhiteSpace newLink.Current)
                                     && isValidUrl newLink.Current
@@ -694,6 +699,7 @@ let basicInfoTabContent (name: IWritable<string>,
                                     newLink.Set"") ]
                     Button.create [ 
                         Button.content "Update"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (not (String.IsNullOrEmpty selectedLink.Current))
                         Button.onClick (fun _ ->
                                 if links.Current.Count > 0
@@ -702,6 +708,7 @@ let basicInfoTabContent (name: IWritable<string>,
                                     links.Current.[selectedLinkIndex.Current] <- newLink.Current) ]
                     Button.create [ 
                         Button.content "Delete"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (not (String.IsNullOrEmpty selectedLink.Current))
                         Button.onClick (fun _ ->
                                 if links.Current.Contains selectedLink.Current
@@ -728,7 +735,6 @@ let experienceTabContent (experiences: IWritable<ObservableCollection<Experience
     period: IWritable<string>, description: IWritable<string>, website: IWritable<string>) =
     StackPanel.create [ 
         StackPanel.orientation Orientation.Vertical
-        StackPanel.classes ["tabContent"]
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems experiences.Current
@@ -792,10 +798,10 @@ let experienceTabContent (experiences: IWritable<ObservableCollection<Experience
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
-                StackPanel.spacing 4.0
                 StackPanel.children [ 
                     Button.create [ 
                         Button.content "Add"
+                        StackPanel.classes ["standart"]
                         Button.onClick (fun _ ->
                             if not (String.IsNullOrWhiteSpace company.Current)
                             then
@@ -823,6 +829,7 @@ let experienceTabContent (experiences: IWritable<ObservableCollection<Experience
                                 website.Set "") ]
                     Button.create [ 
                         Button.content "Update"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                             if selectedIndex.Current >= 0
@@ -841,6 +848,7 @@ let experienceTabContent (experiences: IWritable<ObservableCollection<Experience
                                 experiences.Current |> ignore) ]
                     Button.create [ 
                         Button.content "Delete"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -858,7 +866,6 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
     name: IWritable<string>, fluency: IWritable<string>, level: IWritable<int>) =
     StackPanel.create [ 
         StackPanel.orientation Orientation.Vertical
-        StackPanel.classes ["tabContent"]
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems languages.Current
@@ -907,10 +914,10 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
-                StackPanel.spacing 4.0
                 StackPanel.children [ 
                     Button.create [ 
                         Button.content "Add"
+                        StackPanel.classes ["standart"]
                         Button.onClick (fun _ ->
                                 if not (String.IsNullOrWhiteSpace name.Current)
                                 then
@@ -927,6 +934,7 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
                                     level.Set 0) ]
                     Button.create [ 
                         Button.content "Update"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -939,6 +947,7 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
                                     languages.Current |> ignore) ]
                     Button.create [ 
                         Button.content "Delete"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -953,7 +962,6 @@ let skillsTabContent (skills: IWritable<ObservableCollection<Skill>>, selectedIn
     name: IWritable<string>, keywords: IWritable<string>) =
     StackPanel.create [ 
         StackPanel.orientation Orientation.Vertical
-        StackPanel.classes ["tabContent"]
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems skills.Current
@@ -985,10 +993,10 @@ let skillsTabContent (skills: IWritable<ObservableCollection<Skill>>, selectedIn
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
-                StackPanel.spacing 4.0
                 StackPanel.children [ 
                     Button.create [ 
                         Button.content "Add"
+                        StackPanel.classes ["standart"]
                         Button.onClick (fun _ ->
                                 if not ( String.IsNullOrWhiteSpace name.Current )
                                 then
@@ -1007,6 +1015,7 @@ let skillsTabContent (skills: IWritable<ObservableCollection<Skill>>, selectedIn
                                     keywords.Set "") ]
                     Button.create [ 
                         Button.content "Update"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -1026,6 +1035,7 @@ let skillsTabContent (skills: IWritable<ObservableCollection<Skill>>, selectedIn
                                     skills.Current |> ignore) ]
                     Button.create [ 
                         Button.content "Delete"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -1040,7 +1050,6 @@ let cerificationsTabContent (certifications: IWritable<ObservableCollection<Cert
     label: IWritable<string>, website: IWritable<string>) =
     StackPanel.create [ 
         StackPanel.orientation Orientation.Vertical
-        StackPanel.classes ["tabContent"]
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems certifications.Current
@@ -1095,10 +1104,10 @@ let cerificationsTabContent (certifications: IWritable<ObservableCollection<Cert
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
-                StackPanel.spacing 4.0
                 StackPanel.children [ 
                     Button.create [ 
                         Button.content "Add"
+                        StackPanel.classes ["standart"]
                         Button.onClick (fun _ ->
                                 if not (String.IsNullOrWhiteSpace title.Current)
                                 then
@@ -1124,6 +1133,7 @@ let cerificationsTabContent (certifications: IWritable<ObservableCollection<Cert
                                     website.Set "") ]
                     Button.create [ 
                         Button.content "Update"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -1141,6 +1151,7 @@ let cerificationsTabContent (certifications: IWritable<ObservableCollection<Cert
                                     certifications.Current |> ignore) ]
                     Button.create [ 
                         Button.content "Delete"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -1159,7 +1170,6 @@ let educationTabContent (educations: IWritable<ObservableCollection<Education>>,
     website: IWritable<string>) =
     StackPanel.create [ 
         StackPanel.orientation Orientation.Vertical
-        StackPanel.classes ["tabContent"]
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems educations.Current
@@ -1221,10 +1231,10 @@ let educationTabContent (educations: IWritable<ObservableCollection<Education>>,
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
-                StackPanel.spacing 4.0
                 StackPanel.children [ 
                     Button.create [ 
                         Button.content "Add"
+                        StackPanel.classes ["standart"]
                         Button.onClick (fun _ ->
                                 if not (String.IsNullOrWhiteSpace school.Current)
                                 then
@@ -1249,6 +1259,7 @@ let educationTabContent (educations: IWritable<ObservableCollection<Education>>,
                                     website.Set "") ]
                     Button.create [ 
                         Button.content "Update"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick (fun _ ->
                                 if selectedIndex.Current >= 0
@@ -1265,6 +1276,7 @@ let educationTabContent (educations: IWritable<ObservableCollection<Education>>,
                                     educations.Current |> ignore) ]
                     Button.create [ 
                         Button.content "Delete"
+                        StackPanel.classes ["standart"]
                         Button.isEnabled (selectedIndex.Current >= 0)
                         Button.onClick(fun _ ->
                                 if selectedIndex.Current >= 0
@@ -1338,17 +1350,15 @@ type Views =
             let selectedEduIndexState = ctx.useState -1
 
             ctx.useEffect (
-                handler =
-                    (fun _ ->
-                        xsltFilesState.Set getXsltFiles
+                handler = (fun _ ->
+                    xsltFilesState.Set getXsltFiles
 
-                        if xsltFilesState.Current.Length > 0 then
-                            let defaultXslt = xsltFilesState.Current |> Array.head
-                            selectedXsltIndexState.Set 0
-                            selectedXsltState.Set(Some defaultXslt)),
+                    if xsltFilesState.Current.Length > 0 then
+                        let defaultXslt = xsltFilesState.Current |> Array.head
+                        selectedXsltIndexState.Set 0
+                        selectedXsltState.Set(Some defaultXslt)),
                 triggers = [ EffectTrigger.AfterInit ]
             )
-
 
             let imgSource =
                 match pictureUriState.Current with
@@ -1404,14 +1414,18 @@ type Views =
                         | GenerateToFormat.Html ->
                             match xsltFilePath with
                             | Some xsltPath ->
-                                let html = transformXmlToHtml (xml, xsltPath)
-                                File.WriteAllText(outputFilePath, html)
+                                let htmlOpt = transformXmlToHtml (xml, xsltPath)
+                                match htmlOpt with
+                                | Some html -> File.WriteAllText(outputFilePath, html)
+                                |None -> ()
                             | None -> ()
                         | GenerateToFormat.Pdf ->
                             match xsltFilePath with
                             | Some xsltPath ->
-                                let html = transformXmlToHtml (xml, xsltPath)
-                                do! generatePdfFromHtml (html, outputFilePath) |> Async.AwaitTask
+                                let htmlOpt = transformXmlToHtml (xml, xsltPath)
+                                match htmlOpt with
+                                | Some html -> do! generatePdfFromHtml (html, outputFilePath) |> Async.AwaitTask
+                                |None -> ()                                                               
                             | None -> ()
                 }
                 |> Async.StartImmediate
@@ -1507,7 +1521,6 @@ type Views =
                                                 StackPanel.orientation Orientation.Horizontal
                                                 StackPanel.horizontalAlignment HorizontalAlignment.Right
                                                 StackPanel.verticalAlignment VerticalAlignment.Bottom
-                                                StackPanel.classes ["tabContent"]  
                                                 StackPanel.children [
                                                     ComboBox.create [
                                                         ComboBox.dataItems xsltFilesState.Current
@@ -1561,10 +1574,16 @@ type MainWindow() as this =
             style.Setters.Add(Setter(TextBox.BorderBrushProperty, Brushes.Red))
             style :> IStyle    
             
-        let tabContent =
-            let style = Style(fun x -> x.OfType<StackPanel>().Class "tabContent")
+        let tabContentStyle =
+            let style = Style(fun x -> x.OfType<StackPanel>())
             style.Setters.Add(Setter(StackPanel.SpacingProperty, 4.0))
             style.Setters.Add(Setter(StackPanel.MarginProperty, Thickness.Parse "10.0"))
+            style :> IStyle  
+            
+        let buttonStyle =
+            let style = Style(fun x -> x.OfType<Button>().Class "standart")
+            style.Setters.Add(Setter(Button.WidthProperty, 100.0))
+            style.Setters.Add(Setter(Button.HorizontalContentAlignmentProperty, HorizontalAlignment.Center))
             style :> IStyle              
 
         base.Title <- "Resume Generator"
@@ -1574,9 +1593,9 @@ type MainWindow() as this =
         base.Icon <- new WindowIcon(new Bitmap(Path.Combine(getCurrentDirectory, "favicon.ico")))
 #endif        
         base.Styles.Add invalidTextBoxStyle
-        base.Styles.Add tabContent
+        base.Styles.Add tabContentStyle
+        base.Styles.Add buttonStyle
         this.Content <- Views.main ()
-
 
 type App() =
     inherit Application()
@@ -1591,7 +1610,6 @@ type App() =
         match this.ApplicationLifetime with
         | :? ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime as desktop ->
             desktop.MainWindow <- MainWindow()
-            printfn "App running..."
         | _ -> ()
 
 

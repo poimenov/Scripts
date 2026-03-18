@@ -380,10 +380,15 @@ let transformXmlToHtml (doc: XDocument, xsltPath: string) =
         use docReader = doc.CreateReader()
         xslt.Transform(docReader, args, stringWriter)
         Some (stringWriter.ToString())
-    with ex ->
-        showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}" 
-        |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
-        None      
+    with 
+         | :? XsltException as ex ->
+            showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}, Line number: {ex.LineNumber}, Line position: {ex.LinePosition}" 
+            |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
+            None 
+         | ex ->   
+            showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}"  
+            |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
+            None             
 
 let generatePdfFromHtml (htmlContent: string, outputPath: string) =
     task {

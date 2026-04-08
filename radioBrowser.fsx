@@ -1,13 +1,13 @@
 #if INTERACTIVE
 
-#r "nuget: Avalonia"
-#r "nuget: Avalonia.Desktop"
-#r "nuget: Avalonia.Themes.Fluent"
-#r "nuget: Avalonia.FuncUI"
-#r "nuget: FluentIcons.Avalonia"
+#r "nuget: Avalonia, 11.3.13"
+#r "nuget: Avalonia.Desktop, 11.3.13"
+#r "nuget: Avalonia.Themes.Fluent, 11.3.13"
+#r "nuget: Avalonia.FuncUI, 1.5.2"
+#r "nuget: FluentIcons.Avalonia, 2.0.321"
 #r "nuget: LibVLCSharp"
 #r "nuget: RadioBrowser"
-#r "nuget: AsyncImageLoader.Avalonia"
+#r "nuget: AsyncImageLoader.Avalonia, 3.7.0"
 #r "nuget: PSC.CSharp.Library.CountryData"
 #r "nuget: Avalonia.Svg"
 
@@ -863,14 +863,30 @@ type Views =
                     [ Grid.rowDefinitions "Auto,*"
                       Grid.children [ getSearchPanel; getStationsListBox items.Current ] ]
 
+            let getTabHeader(title: string, symbol: Symbol) =
+                StackPanel.create [
+                    StackPanel.orientation Orientation.Horizontal
+                    StackPanel.spacing 8.0
+                    StackPanel.children [
+                        SymbolIcon.create [
+                            SymbolIcon.symbol symbol
+                            SymbolIcon.width 20.0
+                            SymbolIcon.height 20.0
+                            SymbolIcon.verticalAlignment VerticalAlignment.Center
+                        ]
+                        TextBlock.create [ 
+                            TextBlock.verticalAlignment VerticalAlignment.Center
+                            TextBlock.text title ]
+                    ]]                      
+                      
             let getTabPanel =
                 TabControl.create
                     [ Grid.row 0
                       TabControl.tabStripPlacement Dock.Top
                       TabControl.viewItems
-                          [ TabItem.create [ TabItem.header "Search"; TabItem.content searchPageContent ]
+                          [ TabItem.create [ TabItem.header (getTabHeader ("Search", Symbol.Search)); TabItem.content searchPageContent ]
                             TabItem.create
-                                [ TabItem.header "Favorites"
+                                [ TabItem.header (getTabHeader ("Favorites", Symbol.Star))
                                   TabItem.content (getStationsListBox favItems.Current) ] ] ]
 
             Grid.create [ Grid.rowDefinitions "*, Auto"; Grid.children [ getTabPanel; getPlayerPanel ] ])

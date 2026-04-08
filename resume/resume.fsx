@@ -1,10 +1,11 @@
 #if INTERACTIVE
-#r "nuget: Avalonia.Desktop"
-#r "nuget: Avalonia.Themes.Fluent"
-#r "nuget: Avalonia.FuncUI"
-#r "nuget: MessageBox.Avalonia"
-#r "nuget: PuppeteerSharp"
-#r "nuget: Markdig"
+#r "nuget: Avalonia.Desktop, 11.3.13"
+#r "nuget: Avalonia.Themes.Fluent, 11.3.13"
+#r "nuget: Avalonia.FuncUI, 1.5.2"
+#r "nuget: FluentIcons.Avalonia, 2.0.321"
+#r "nuget: MessageBox.Avalonia, 3.3.1.1"
+#r "nuget: PuppeteerSharp, 24.40.0"
+#r "nuget: Markdig, 1.1.2"
 #endif
 
 open System
@@ -25,11 +26,14 @@ open Avalonia.Media
 open Avalonia.Media.Imaging
 open Avalonia.Platform.Storage
 open Avalonia.Styling
+open FluentIcons.Avalonia
 open PuppeteerSharp
 open PuppeteerSharp.Media
 open Markdig
 open MsBox.Avalonia
 open MsBox.Avalonia.Enums
+open FluentIcons.Common
+open System.Runtime.InteropServices
 
 type GenerateToFormat =
     | Pdf
@@ -95,6 +99,24 @@ let getCurrentDirectory =
 
 let emailRegex = Regex("^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled)
 let phoneRegex = Regex("^\+?[0-9\s\-()]+$", RegexOptions.Compiled)
+
+[<AutoOpen>]
+module SymbolIcon =
+    open Avalonia.FuncUI.Types
+    open Avalonia.FuncUI.Builder
+    open FluentIcons.Avalonia
+    open FluentIcons.Common
+
+    let create (attrs: IAttr<SymbolIcon> list) : IView<SymbolIcon> = ViewBuilder.Create<SymbolIcon> attrs
+
+    type SymbolIcon with
+        static member symbol<'t when 't :> SymbolIcon>(value: Symbol) : IAttr<'t> =
+            AttrBuilder<'t>
+                .CreateProperty<Symbol>(SymbolIcon.SymbolProperty, value, ValueNone)
+
+        static member iconVariant<'t when 't :> SymbolIcon>(value: IconVariant) : IAttr<'t> =
+            AttrBuilder<'t>
+                .CreateProperty<IconVariant>(SymbolIcon.IconVariantProperty, value, ValueNone)
 
 let isValidUrl (url: string) =
     try
@@ -390,11 +412,49 @@ let transformXmlToHtml (doc: XDocument, xsltPath: string) =
             |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
             None             
 
+let findChromePath =
+    let commonPaths =
+        if RuntimeInformation.IsOSPlatform OSPlatform.Windows then
+            [ @"C:\Program Files\Google\Chrome\Application\chrome.exe"
+              @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+              Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData
+              + @"\Google\Chrome\Application\chrome.exe" ]
+        elif RuntimeInformation.IsOSPlatform OSPlatform.Linux then
+            [ "/usr/bin/google-chrome"
+              "/usr/bin/chromium"
+              "/usr/bin/chromium-browser"
+              "/usr/bin/google-chrome-stable" ]
+        elif RuntimeInformation.IsOSPlatform OSPlatform.OSX then
+            [ @"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+              Environment.GetFolderPath Environment.SpecialFolder.UserProfile
+              + @"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]
+        else
+            []
+
+    commonPaths |> List.tryFind File.Exists
+
+let launchOptions =
+    task {
+        let chromePath = findChromePath
+
+        let options =
+            LaunchOptions(Headless = true, Args = [| "--no-sandbox"; "--disable-setuid-sandbox" |])
+
+        match chromePath with
+        | Some path ->
+            options.ExecutablePath <- path
+            return options
+        | None ->
+            let browserFetcher = new BrowserFetcher()
+            let! installedBrowser = browserFetcher.DownloadAsync()
+            options.ExecutablePath <- installedBrowser.GetExecutablePath()
+            return options
+    }    
+            
 let generatePdfFromHtml (htmlContent: string, outputPath: string) =
     task {
-        let browserFetcher = new BrowserFetcher()
-        let! _installedBrowser = browserFetcher.DownloadAsync()
-        use! browser = Puppeteer.LaunchAsync(LaunchOptions(Headless = true, Args = [|"--no-sandbox"; "--disable-setuid-sandbox"|]))
+        let! options = launchOptions
+        use! browser = Puppeteer.LaunchAsync options
         use! page = browser.NewPageAsync()
         do! page.SetContentAsync htmlContent
 
@@ -1465,6 +1525,23 @@ type Views =
                   skillsState = skillsState
                   certificationsState = certificationsState
                   educationsState = educationsState }
+            
+            let getTabHeader(title: string, symbol: Symbol) =
+                StackPanel.create [
+                    StackPanel.orientation Orientation.Horizontal
+                    StackPanel.spacing 8.0
+                    StackPanel.children [
+                        SymbolIcon.create [
+                            SymbolIcon.symbol symbol
+                            SymbolIcon.width 20.0
+                            SymbolIcon.height 20.0
+                            SymbolIcon.verticalAlignment VerticalAlignment.Center
+                        ]
+                        TextBlock.create [ 
+                            TextBlock.verticalAlignment VerticalAlignment.Center
+                            TextBlock.text title ]
+                    ]]
+
 
             DockPanel.create
                 [ DockPanel.children
@@ -1482,35 +1559,35 @@ type Views =
                                                 TabControl.tabStripPlacement Dock.Left
                                                 TabControl.viewItems [
                                                     TabItem.create [
-                                                            TabItem.header "Picture"
+                                                            TabItem.header (getTabHeader("Picture", Symbol.Image))
                                                             TabItem.content (pictureTabConent(imgSource, pictureUriState))]
                                                     TabItem.create [
-                                                            TabItem.header "Basic Info"
+                                                            TabItem.header (getTabHeader("Basic Info", Symbol.PersonInfo))
                                                             TabItem.content (basicInfoTabContent(nameState, headlineState, 
                                                                 emailState, phoneState, locationState, linksState,
                                                                 selectedLinkState, newLinkState, selectedLinkIndexState))]
                                                     TabItem.create [
-                                                            TabItem.header "Summary"
+                                                            TabItem.header (getTabHeader("Summary", Symbol.Markdown))
                                                             TabItem.content (summaryTabContent summaryState)]
                                                     TabItem.create [
-                                                            TabItem.header "Experience"
+                                                            TabItem.header (getTabHeader("Experience", Symbol.Briefcase))
                                                             TabItem.content (experienceTabContent(experiencesState, selectedExpIndexState, 
                                                                 newExpCompanyState, newExpPositionState, newExpLocationState, newExpPeriodState, 
                                                                 newExpDescriptionState,newExpWebsiteState))]
                                                     TabItem.create [
-                                                            TabItem.header "Languages"
+                                                            TabItem.header (getTabHeader("Languages", Symbol.Globe))
                                                             TabItem.content (languagesTabContent(languagesState, selectedLangIndexState, 
                                                                 newLangNameState, newLangFluencyState, newLangLevelState))]
                                                     TabItem.create [
-                                                            TabItem.header "Skills"
+                                                            TabItem.header (getTabHeader("Skills", Symbol.Star))
                                                             TabItem.content (skillsTabContent(skillsState, selectedSkillIndexState, 
                                                                 newSkillNameState, newSkillKeywordsState))]
                                                     TabItem.create [
-                                                            TabItem.header "Cerifications"
+                                                            TabItem.header (getTabHeader("Cerifications", Symbol.Certificate))
                                                             TabItem.content (cerificationsTabContent(certificationsState, selectedCertIndexState, 
                                                                 newCertTitleState, newCertIssuerState, newCertDateState, newCertLabelState, newCertWebsiteState))]
                                                     TabItem.create [
-                                                            TabItem.header "Education"
+                                                            TabItem.header (getTabHeader("Education", Symbol.Book))
                                                             TabItem.content (educationTabContent(educationsState, selectedEduIndexState, newEduSchoolState, 
                                                                 newEduDegreeState, newEduAreaState, newEduGradeState, newEduLocationState, newEduPeriodState, newEduWebsiteState))]                                                                                                                                                                                                                                                                                                                                                                                                                                                            
                                                 ] ] ) ]

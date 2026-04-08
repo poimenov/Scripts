@@ -1,9 +1,9 @@
 #if INTERACTIVE
 
-#r "nuget: Avalonia"
-#r "nuget: Avalonia.Desktop"
-#r "nuget: Avalonia.Themes.Fluent"
-#r "nuget: Avalonia.FuncUI"
+#r "nuget: Avalonia, 11.3.13"
+#r "nuget: Avalonia.Desktop, 11.3.13"
+#r "nuget: Avalonia.Themes.Fluent, 11.3.13"
+#r "nuget: Avalonia.FuncUI, 1.5.2"
 #r "nuget: FSharp.Data"
 
 #endif

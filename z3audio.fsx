@@ -1,12 +1,12 @@
 #if INTERACTIVE
 
-#r "nuget: Avalonia"
-#r "nuget: Avalonia.Desktop"
-#r "nuget: Avalonia.Themes.Fluent"
-#r "nuget: Avalonia.FuncUI"
+#r "nuget: Avalonia, 11.3.13"
+#r "nuget: Avalonia.Desktop, 11.3.13"
+#r "nuget: Avalonia.Themes.Fluent, 11.3.13"
+#r "nuget: Avalonia.FuncUI, 1.5.2"
+#r "nuget: FluentIcons.Avalonia, 2.0.321"
 #r "nuget: FSharp.Data"
 #r "nuget: LibVLCSharp"
-#r "nuget: FluentIcons.Avalonia"
 
 #endif
 

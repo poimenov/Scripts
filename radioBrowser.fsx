@@ -9,7 +9,8 @@
 #r "nuget: RadioBrowser"
 #r "nuget: AsyncImageLoader.Avalonia, 3.7.0"
 #r "nuget: PSC.CSharp.Library.CountryData"
-#r "nuget: Avalonia.Svg"
+#r "nuget: Svg.Controls.Avalonia, 11.3.9.5"
+#r "nuget: Tmds.DBus.Protocol, 0.92.0"
 
 #endif
 
@@ -487,14 +488,18 @@ type Views =
                 svgImage
 
             let getItem (item: Station, textWidth: double) =
-                let defaultImg = new Bitmap(Path.Combine(__SOURCE_DIRECTORY__, "img/radio.png"))
+                let defaultImg = 
+                    let retVal = new SvgImage()
+                    retVal.Source <- SvgSource.Load(Path.Combine("img","radio.svg"), Uri __SOURCE_DIRECTORY__)
+                    retVal :> IImage
 
-                let img =
+                let img : Async<IImage> =
                     async {
-                        if item.ImageUrl = null then
-                            return defaultImg
+                        if String.IsNullOrWhiteSpace item.ImageUrl then
+                            return defaultImg 
                         else
-                            return! ImageLoader.AsyncImageLoader.ProvideImageAsync item.ImageUrl |> Async.AwaitTask
+                            let! image = ImageLoader.AsyncImageLoader.ProvideImageAsync item.ImageUrl |> Async.AwaitTask
+                            return image :> IImage
                     }
 
                 let svgImage = getSvgImageBycountryCode item.CountryCode
@@ -523,7 +528,8 @@ type Views =
                                                     (fun b -> x.Source <- b),
                                                     (fun _ -> x.Source <- defaultImg),
                                                     (fun _ -> x.Source <- defaultImg)
-                                                )) ]
+                                                )
+                                                ) ]
                                       StackPanel.create
                                           [ StackPanel.orientation Orientation.Vertical
                                             StackPanel.margin 5
@@ -746,8 +752,15 @@ type Views =
                 | None -> false
 
             let getPlayerPanel =
+                Border.create
+                    [ Grid.row 2                      
+                      Border.padding 5.
+                      Border.borderBrush "Gray"
+                      Border.borderThickness(0.0, 1.0, 0.0, 0.0)                      
+                      Border.margin 0. 
+                      Border.child (                
                 Grid.create
-                    [ Grid.row 2
+                    [ 
                       Grid.columnDefinitions "*, Auto, Auto, Auto, Auto"
                       Grid.children
                           [ Panel.create
@@ -856,7 +869,8 @@ type Views =
                                   Button.isEnabled playEnabled.Current
                                   Button.onClick (fun _ -> Async.StartImmediate playStop) ]
 
-                            ] ]
+                            ] ] 
+                            ) ]
 
             let searchPageContent =
                 Grid.create

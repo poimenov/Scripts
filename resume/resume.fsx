@@ -45,6 +45,7 @@ type GenerateToFormat =
     | Pdf
     | Xml
     | Html
+    | Md
 
 type XsltFile(name: string, path: string) =
     member val Name = name with get, set
@@ -187,6 +188,7 @@ let chooseFile (format: GenerateToFormat) =
                 options.DefaultExtension <-
                     match format with
                     | GenerateToFormat.Xml -> "xml"
+                    | GenerateToFormat.Md -> "md"
                     | GenerateToFormat.Html -> "html"
                     | GenerateToFormat.Pdf -> "pdf"
 
@@ -198,6 +200,11 @@ let chooseFile (format: GenerateToFormat) =
                         FilePickerFileType "XML"
                         |> fun x ->
                             x.Patterns <- [| "*.xml" |]
+                            x
+                    | GenerateToFormat.Md ->
+                        FilePickerFileType "Markdown"
+                        |> fun x ->
+                            x.Patterns <- [| "*.md" |]
                             x
                     | GenerateToFormat.Html ->
                         FilePickerFileType "HTML"
@@ -225,6 +232,13 @@ let getXsltFiles =
         |> Array.map (fun f -> XsltFile(Path.GetFileNameWithoutExtension f.Name, f.FullName))
     else
         Array.empty
+
+let markdownTemplate =
+    let folder = Path.Combine(getCurrentDirectory, "xslt") |> DirectoryInfo
+    if folder.Exists && folder.GetFiles("markdown.xsl").Length > 0 then
+        Some (Path.Combine(getCurrentDirectory, "xslt", "markdown.xsl"))
+    else
+        None
 
 let chooseXmlPath () =
     async {
@@ -451,6 +465,24 @@ let transformXmlToHtml (doc: XDocument, xsltPath: string) =
             showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}"  
             |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
             None             
+
+let transformToText (doc: XDocument, xsltPath: string) =
+    try
+        let xslt = new XslCompiledTransform()
+        xslt.Load xsltPath
+        use stringWriter = new StringWriter()
+        use docReader = doc.CreateReader()
+        xslt.Transform(docReader, null, stringWriter)
+        Some (stringWriter.ToString())
+    with 
+         | :? XsltException as ex ->
+            showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}, Line number: {ex.LineNumber}, Line position: {ex.LinePosition}" 
+            |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
+            None 
+         | ex ->   
+            showErrorMsgBoxAsync $"Failed to transform XSLT '{xsltPath}': {ex.Message}"  
+            |> Async.StartImmediateAsTask |> Async.AwaitTask |> ignore
+            None
 
 let findChromePath =
     let commonPaths =
@@ -1536,6 +1568,12 @@ type Views =
 
                         match format with
                         | GenerateToFormat.Xml -> xml.Save outputFilePath
+                        | GenerateToFormat.Md ->
+                            if markdownTemplate.IsSome then
+                                let mdOpt = transformToText (xml, markdownTemplate.Value)
+                                match mdOpt with
+                                | Some md -> File.WriteAllText(outputFilePath, md)
+                                | None -> ()
                         | GenerateToFormat.Html ->
                             match xsltFilePath with
                             | Some xsltPath ->
@@ -1564,6 +1602,9 @@ type Views =
                     | Some outputPath ->
                         match format with
                         | Xml -> generateResume (format, outputPath, None)
+                        | Md -> 
+                            if markdownTemplate.IsSome then
+                                generateResume (format, outputPath, markdownTemplate)
                         | _ ->
                             match selectedXsltState.Current with
                             | Some xsltFile -> generateResume (format, outputPath, Some xsltFile.Path)
@@ -1708,6 +1749,10 @@ type Views =
                                                                 MenuItem.create [ 
                                                                     MenuItem.header "XML"
                                                                     MenuItem.onClick (fun _ -> startGenerateResume Xml) ]
+                                                                MenuItem.create [ 
+                                                                    MenuItem.header "MD"
+                                                                    MenuItem.isVisible markdownTemplate.IsSome
+                                                                    MenuItem.onClick (fun _ -> startGenerateResume Md) ]                                                                                                                                      
                                                                 MenuItem.create [ 
                                                                     MenuItem.header "HTML"
                                                                     MenuItem.isEnabled selectedXsltState.Current.IsSome

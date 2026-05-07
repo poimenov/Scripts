@@ -64,6 +64,17 @@
                         padding: 12px;
                     }
 
+                    .avatar {
+                        display: inline-block;
+                        padding: 0;
+                        margin: 0px 95px 10px 35px;
+                        height: 120px;
+                        width: 120px;
+                        border-radius: 12px;
+                        background-size: cover !important;
+                        border: 1px solid #fff
+                    }                    
+
                     .profile-picture {
                         width: var(--sidebar-width);
                         height: 120px;
@@ -312,7 +323,9 @@
                     <div class="profile-picture">
                         <xsl:choose>
                             <xsl:when test="picture != '' and picture != 'data:,'">
-                                <img src="{picture}" alt="Profile picture"/>
+                                <div class="avatar"
+                                    style="background:url('{picture}') no-repeat center; background-size: cover;background-color: white;">
+                                </div>                                
                             </xsl:when>
                             <xsl:otherwise>
                                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -438,7 +451,7 @@
                 <xsl:choose>
                     <xsl:when test="contains(., 'linkedin')">LinkedIn</xsl:when>
                     <xsl:when test="contains(., 'github')">GitHub</xsl:when>
-                    <xsl:otherwise>Website</xsl:otherwise>
+                    <xsl:otherwise><xsl:value-of select="."/></xsl:otherwise>
                 </xsl:choose>
             </a>
         </div>    

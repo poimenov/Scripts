@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0"
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+    xmlns:ext="urn:ExtObj">
+    <xsl:output method="html" indent="yes" encoding="UTF-8"/>
+
+    <xsl:template match="/">
+        <html lang="en">
+            <head>
+                <meta charset="UTF-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                <title>
+                    <xsl:value-of select="resume/name"/>
+ - Professional Resume</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com"/>
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin"/>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+                <style>
+                    <![CDATA[
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: 'Inter', sans-serif; background: #eef2f5; min-height: 100vh; padding: 20px; font-size: 14px; line-height: 1.5; color: #1f2937; }
+                    .mx-auto { max-width: 210mm; margin: 0 auto; width: 100%; }
+                    .resume-container { --sidebar-width: 34%; --primary-color: #2c3e50; --bg-color: #ffffff; background: var(--bg-color); box-shadow: 0 20px 40px rgba(0,0,0,0.1); border-radius: 16px; overflow: hidden; width: 100%; }
+                    a { color: #6b7280;; text-decoration: none; }
+                    a:hover { text-decoration: underline; }
+                    
+                    /* Header */
+                    .page-header { background: var(--primary-color); color: white; }
+                    .header-main { display: flex; align-items: center; padding: 24px; gap: 24px; flex-wrap: wrap; }
+                    .profile-picture { flex-shrink: 0; }
+                    .profile-picture img, .avatar { width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 3px solid white; background: white; }
+                    .profile-info { flex: 1; }
+                    .profile-name { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+                    .profile-headline { font-size: 18px; opacity: 0.9; font-weight: 400; }
+                    
+                    /* Contact Bar */
+                    .contact-bar { background: #f8fafc; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; }
+                    .contact-items { display: flex; flex-wrap: wrap; gap: 20px; }
+                    .contact-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+                    .contact-item svg { width: 18px; height: 18px; fill: var(--primary-color); flex-shrink: 0; }
+                    .contact-item a, .contact-item span { color: #475569; }
+                    
+                    /* Main Layout */
+                    .main-layout { display: flex; padding: 24px; gap: 32px; }
+                    .sidebar { width: var(--sidebar-width); flex-shrink: 0; }
+                    .content { flex: 1; }
+                    
+                    /* Sections */
+                    .page-section { margin-bottom: 28px; }
+                    .page-section h6 { color: var(--primary-color); font-size: 18px; font-weight: 700; margin-bottom: 16px; padding-bottom: 6px; border-bottom: 2px solid var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; }
+                    .section-item { margin-bottom: 16px; }
+                    .section-item-title { font-weight: 700; font-size: 15px; color: #1f2937; }
+                    .section-item-metadata { font-size: 12px; color: #6b7280; }                  
+                    .section-item-description { margin-top: 8px; font-size: 13px; color: #4b5563; padding-left: 16px;}
+                    .section-item-keywords { margin-top: 6px; font-size: 12px; color: #6b7280; }
+                    .flex-between { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+                    .text-end { text-align: right; }
+                    .opacity-80 { opacity: 0.8; }
+                    .shrink-0 { flex-shrink: 0; }
+                    .language-level { display: flex; gap: 6px; margin-top: 6px; }
+                    .level-dot { width: 12px; height: 12px; border: 1px solid var(--primary-color); border-radius: 50%; }
+                    .level-dot.active { background: var(--primary-color); }
+                    
+                    @media (max-width: 768px) { .main-layout { flex-direction: column; } .sidebar { width: 100%; } }
+                    @media print { body { padding: 0; background: white; } .resume-container { box-shadow: none; border-radius: 0; } }
+                    ]]>
+                </style>
+            </head>
+            <body>
+                <div class="mx-auto">
+                    <xsl:apply-templates select="resume"/>
+                </div>
+            </body>
+        </html>
+    </xsl:template>
+
+    <xsl:template match="resume">
+        <div class="resume-container">
+            <!-- Header -->
+            <div class="page-header">
+                <div class="header-main">
+                    <div class="profile-picture">
+                        <xsl:choose>
+                            <xsl:when test="picture != '' and picture != 'data:,'">
+                                <div class="avatar" style="background:url('{picture}') no-repeat center; background-size: cover; background-color: white;"></div>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="130" height="130">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                    </div>
+                    <div class="profile-info">
+                        <h1 class="profile-name">
+                            <xsl:value-of select="name"/>
+                        </h1>
+                        <p class="profile-headline">
+                            <xsl:value-of select="headline"/>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Bar -->
+            <div class="contact-bar">
+                <div class="contact-items">
+                    <xsl:if test="email != ''">
+                        <div class="contact-item">
+                            <svg viewBox="0 0 256 256">
+                                <path d="M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48Zm-96,85.15L52.57,64H203.43ZM98.71,128,40,181.81V74.19Zm11.84,10.85,12,11.05a8,8,0,0,0,10.82,0l12-11.05,58,53.15H52.57ZM157.29,128,216,74.18V181.82Z"/>
+                            </svg>
+                            <a href="mailto:{email}">
+                                <xsl:value-of select="email"/>
+                            </a>
+                        </div>
+                    </xsl:if>
+                    <xsl:if test="phone != ''">
+                        <div class="contact-item">
+                            <svg viewBox="0 0 256 256">
+                                <path d="M222.37,158.46l-47.11-21.11-.13-.06a16,16,0,0,0-15.17,1.4,8.12,8.12,0,0,0-.75.56L134.87,160c-15.42-7.49-31.34-23.29-38.83-38.51l20.78-24.71c.2-.25.39-.5.57-.77a16,16,0,0,0,1.32-15.06l0-.12L97.54,33.64a16,16,0,0,0-16.62-9.52A56.26,56.26,0,0,0,32,80c0,79.4,64.6,144,144,144a56.26,56.26,0,0,0,55.88-48.92A16,16,0,0,0,222.37,158.46ZM176,208A128.14,128.14,0,0,1,48,80a40.2,40.2,0,0,1,34.87-40,.61.61,0,0,0,0,.12l21,47L83.2,111.86a6.13,6.13,0,0,0-.57.77,16,16,0,0,0-1,15.7c9.06,18.53,27.73,37.06,46.46,46.11a16,16,0,0,0,15.75-1.14,8.44,8.44,0,0,0,.74-.56L168.89,152l47,21.05h0s.08,0,.11,0A40.21,40.21,0,0,1,176,208Z"/>
+                            </svg>
+                            <a href="tel:{phone}">
+                                <xsl:value-of select="phone"/>
+                            </a>
+                        </div>
+                    </xsl:if>
+                    <xsl:if test="location != ''">
+                        <div class="contact-item">
+                            <svg viewBox="0 0 256 256">
+                                <path d="M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z"/>
+                            </svg>
+                            <span>
+                                <xsl:value-of select="location"/>
+                            </span>
+                        </div>
+                    </xsl:if>
+                    <xsl:apply-templates select="links/link"/>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-layout">
+                <div class="sidebar">
+                    <xsl:if test="skills/skill">
+                        <section class="page-section">
+                            <h6>Skills</h6>
+                            <xsl:apply-templates select="skills/skill"/>
+                        </section>
+                    </xsl:if>
+                    <xsl:if test="certifications/certification">
+                        <section class="page-section">
+                            <h6>Certifications</h6>
+                            <xsl:apply-templates select="certifications/certification"/>
+                        </section>
+                    </xsl:if>
+                    <xsl:if test="languages/language">
+                        <section class="page-section">
+                            <h6>Languages</h6>
+                            <xsl:apply-templates select="languages/language"/>
+                        </section>
+                    </xsl:if>
+                </div>
+                <div class="content">
+                    <xsl:if test="summary != ''">
+                        <section class="page-section">
+                            <h6>Summary</h6>
+                            <div class="section-item-description">
+                                <xsl:value-of select="ext:ConvertToHtml(summary)" disable-output-escaping="yes"/>
+                            </div>
+                        </section>
+                    </xsl:if>
+                    <xsl:if test="experiences/experience">
+                        <section class="page-section">
+                            <h6>Experience</h6>
+                            <xsl:apply-templates select="experiences/experience"/>
+                        </section>
+                    </xsl:if>
+                    <xsl:if test="educations/education">
+                        <section class="page-section">
+                            <h6>Education</h6>
+                            <xsl:apply-templates select="educations/education"/>
+                        </section>
+                    </xsl:if>
+                </div>
+            </div>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="link">
+        <div class="contact-item">
+            <svg viewBox="0 0 256 256">
+                <path d="M128,24h0A104,104,0,1,0,232,128,104.12,104.12,0,0,0,128,24Zm88,104a87.61,87.61,0,0,1-3.33,24H174.16a157.44,157.44,0,0,0,0-48h38.51A87.61,87.61,0,0,1,216,128ZM102,168H154a115.11,115.11,0,0,1-26,45A115.27,115.27,0,0,1,102,168Zm-3.9-16a140.84,140.84,0,0,1,0-48h59.88a140.84,140.84,0,0,1,0,48ZM40,128a87.61,87.61,0,0,1,3.33-24H81.84a157.44,157.44,0,0,0,0,48H43.33A87.61,87.61,0,0,1,40,128ZM154,88H102a115.11,115.11,0,0,1,26-45A115.27,115.27,0,0,1,154,88Zm52.33,0H170.71a135.28,135.28,0,0,0-22.3-45.6A88.29,88.29,0,0,1,206.37,88ZM107.59,42.4A135.28,135.28,0,0,0,85.29,88H49.63A88.29,88.29,0,0,1,107.59,42.4ZM49.63,168H85.29a135.28,135.28,0,0,0,22.3,45.6A88.29,88.29,0,0,1,49.63,168Zm98.78,45.6a135.28,135.28,0,0,0,22.3-45.6h35.66A88.29,88.29,0,0,1,148.41,213.6Z"/>
+            </svg>
+            <a href="{.}" target="_blank" rel="noopener">
+                <xsl:choose>
+                    <xsl:when test="contains(., 'linkedin')">LinkedIn</xsl:when>
+                    <xsl:when test="contains(., 'github')">GitHub</xsl:when>
+                    <xsl:otherwise>Profile</xsl:otherwise>
+                </xsl:choose>
+            </a>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="skill">
+        <div class="section-item">
+            <div class="section-item-title">
+                <xsl:value-of select="name"/>
+            </div>
+            <xsl:if test="keywords/keyword">
+                <div class="section-item-keywords">
+                    <xsl:apply-templates select="keywords/keyword"/>
+                </div>
+            </xsl:if>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="keyword">
+        <span>
+            <xsl:value-of select="."/>
+            <xsl:if test="position() != last()">, </xsl:if>
+        </span>
+    </xsl:template>
+
+    <xsl:template match="certification">
+        <div class="section-item">
+            <div class="flex-between">
+                <span class="section-item-title">
+                    <xsl:value-of select="title"/>
+                </span>
+                <span class="section-item-metadata">
+                    <xsl:value-of select="date"/>
+                </span>
+            </div>
+            <div>
+                <span class="section-item-metadata">
+                    <xsl:value-of select="issuer"/>
+                </span>
+            </div>
+            <xsl:if test="label != ''">
+                <div class="section-item-metadata">
+                    <xsl:if test="website != ''">
+                        <a href="{website}" target="_blank" rel="noopener">
+                            <xsl:value-of select="label"/>
+                        </a>
+                    </xsl:if>                 
+                </div>
+            </xsl:if>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="language">
+        <div class="section-item">
+            <div class="section-item-title">
+                <xsl:value-of select="name"/>
+            </div>
+            <xsl:if test="fluency != ''">
+                <div class="section-item-metadata">
+                    <xsl:value-of select="fluency"/>
+                </div>
+            </xsl:if>
+            <div class="language-level">
+                <xsl:call-template name="language-level">
+                    <xsl:with-param name="level" select="level"/>
+                </xsl:call-template>
+            </div>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="experience">
+        <div class="section-item">
+            <div class="flex-between">
+                <xsl:choose>
+                    <xsl:when test="website != ''">
+                        <a href="{website}" target="_blank" class="section-item-title">
+                            <strong>
+                                <xsl:value-of select="company"/>
+                            </strong>
+                        </a>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <strong class="section-item-title">
+                            <xsl:value-of select="company"/>
+                        </strong>
+                    </xsl:otherwise>
+                </xsl:choose>
+                <span class="section-item-metadata">
+                    <xsl:value-of select="period"/>
+                </span>
+            </div>
+            <div class="flex-between">
+                <span class="section-item-metadata">
+                    <xsl:value-of select="position"/>
+                </span>
+                <xsl:if test="location != ''">
+                    <span class="section-item-metadata">
+                        <xsl:value-of select="location"/>
+                    </span>
+                </xsl:if>
+            </div>
+            <div class="section-item-description">
+                <xsl:value-of select="ext:ConvertToHtml(description)" disable-output-escaping="yes"/>
+            </div>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="education">
+        <div class="section-item">
+            <div class="flex-between">
+                <xsl:choose>
+                    <xsl:when test="website != ''">
+                        <a href="{website}" target="_blank" class="section-item-title">
+                            <strong>
+                                <xsl:value-of select="school"/>
+                            </strong>
+                        </a>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <strong class="section-item-title">
+                            <xsl:value-of select="school"/>
+                        </strong>
+                    </xsl:otherwise>
+                </xsl:choose>
+                <span class="section-item-metadata">
+                    <xsl:value-of select="period"/>
+                </span>
+            </div>
+            <div class="flex-between">
+                <span class="section-item-metadata">
+                    <xsl:value-of select="degree"/>
+                    <xsl:if test="degree != '' and area != ''">, </xsl:if>
+                    <xsl:value-of select="area"/>
+                </span>
+                <span class="section-item-metadata">
+                    <xsl:value-of select="location"/>
+                </span>
+            </div>
+            <xsl:if test="grade != ''">
+                <div class="section-item-metadata">Grade: <xsl:value-of select="grade"/>
+                </div>
+            </xsl:if>
+        </div>
+    </xsl:template>
+
+    <xsl:template name="language-level">
+        <xsl:param name="level"/>
+        <div class="level-dot">
+            <xsl:if test="$level &gt;= 1">
+                <xsl:attribute name="class">level-dot active</xsl:attribute>
+            </xsl:if>
+        </div>
+        <div class="level-dot">
+            <xsl:if test="$level &gt;= 2">
+                <xsl:attribute name="class">level-dot active</xsl:attribute>
+            </xsl:if>
+        </div>
+        <div class="level-dot">
+            <xsl:if test="$level &gt;= 3">
+                <xsl:attribute name="class">level-dot active</xsl:attribute>
+            </xsl:if>
+        </div>
+        <div class="level-dot">
+            <xsl:if test="$level &gt;= 4">
+                <xsl:attribute name="class">level-dot active</xsl:attribute>
+            </xsl:if>
+        </div>
+        <div class="level-dot">
+            <xsl:if test="$level &gt;= 5">
+                <xsl:attribute name="class">level-dot active</xsl:attribute>
+            </xsl:if>
+        </div>
+    </xsl:template>
+</xsl:stylesheet>

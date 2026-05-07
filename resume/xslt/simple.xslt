@@ -97,8 +97,8 @@
                 </h4> 
             </div> 
             <xsl:choose> 
-                <xsl:when test="picturePath != '' and picturePath != 'data:,'"> 
-                    <img src="{picturePath}" alt="Profile picture"/> 
+                <xsl:when test="picture != '' and picture != 'data:,'"> 
+                    <img src="{picture}" alt="Profile picture"/> 
                 </xsl:when> 
                 <xsl:otherwise> 
                     <svg viewBox="0 0 24 24" fill="currentColor"> 

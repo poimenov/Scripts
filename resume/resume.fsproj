@@ -21,6 +21,8 @@
     <PackageReference Include="PuppeteerSharp" Version="24.39.0" />
     <PackageReference Include="Markdig" Version="1.1.1" />
     <PackageReference Include="MessageBox.Avalonia" Version="3.3.1" />   
-    <PackageReference Include="FluentIcons.Avalonia" Version="2.0.321" />     
+    <PackageReference Include="FluentIcons.Avalonia" Version="2.0.321" />   
+    <PackageReference Include="FSharp.Data.Adaptive" Version="1.2.26" />
+    <PackageReference Include="Svg.Controls.Skia.Avalonia" Version="11.3.9.5" />  
   </ItemGroup>
 </Project>

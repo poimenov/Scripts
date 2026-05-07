@@ -2,15 +2,19 @@
 #r "nuget: Avalonia.Desktop, 11.3.13"
 #r "nuget: Avalonia.Themes.Fluent, 11.3.13"
 #r "nuget: Avalonia.FuncUI, 1.5.2"
+#r "nuget: Svg.Controls.Skia.Avalonia, 11.3.9.5"
 #r "nuget: FluentIcons.Avalonia, 2.0.321"
 #r "nuget: MessageBox.Avalonia, 3.3.1.1"
 #r "nuget: PuppeteerSharp, 24.40.0"
 #r "nuget: Markdig, 1.1.2"
+#r "nuget: FSharp.Data.Adaptive, 1.2.26"
+
 #endif
 
 open System
 open System.Collections.ObjectModel
 open System.IO
+open System.Runtime.InteropServices
 open System.Text.RegularExpressions
 open System.Xml.Linq
 open System.Xml.Xsl
@@ -26,14 +30,16 @@ open Avalonia.Media
 open Avalonia.Media.Imaging
 open Avalonia.Platform.Storage
 open Avalonia.Styling
+open Avalonia.Svg.Skia
 open FluentIcons.Avalonia
-open PuppeteerSharp
-open PuppeteerSharp.Media
+open FluentIcons.Common
+open FSharp.Data.Adaptive
 open Markdig
 open MsBox.Avalonia
 open MsBox.Avalonia.Enums
-open FluentIcons.Common
-open System.Runtime.InteropServices
+open PuppeteerSharp
+open PuppeteerSharp.Media
+open SkiaSharp
 
 type GenerateToFormat =
     | Pdf
@@ -99,6 +105,7 @@ let getCurrentDirectory =
 
 let emailRegex = Regex("^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled)
 let phoneRegex = Regex("^\+?[0-9\s\-()]+$", RegexOptions.Compiled)
+let defaultPicture = "<svg id=\"Layer_1\" data-name=\"Layer 1\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120.92 122.88\"><defs><style>.cls-1{fill-rule:evenodd;}</style></defs><title>man-person</title><path class=\"cls-1\" d=\"M70.43,46.92a2.64,2.64,0,1,1-2.64,2.64,2.64,2.64,0,0,1,2.64-2.64Zm3.43,27.81c4.08-3.83,7.09-6.66,6.51-13.54h0a1.62,1.62,0,0,1,.26-1,1.59,1.59,0,0,1,2.21-.44,4.39,4.39,0,0,0,.83.43,2.42,2.42,0,0,0,.7.16,3.11,3.11,0,0,0,.69,0,3.41,3.41,0,0,0,.3-.74l2-5.74c.36-1.36.58-2.88-1.24-2.74a5.64,5.64,0,0,0-2.83,1.18,1.62,1.62,0,0,1-1.25.32,1.59,1.59,0,0,1-1.3-1.84c1.5-8.75.81-14.46-1-18.35a15.69,15.69,0,0,0-7.07-7C66.38,30.21,62,30.76,57.56,31.3c-3.64.45-7.27.9-12.09,4.23a11.63,11.63,0,0,0-4.59,5.74,14.41,14.41,0,0,0-.19,7.85,1.63,1.63,0,0,1,0,1,1.6,1.6,0,0,1-2,1l-.23-.08-1.23-.44c-1.88-.66-3.22-1-3.73.21-.25,2.44-.24,8,2.06,9.35a1.75,1.75,0,0,0,.9.23,4.19,4.19,0,0,0,1.3-.21,1.86,1.86,0,0,1,.48-.09,1.59,1.59,0,0,1,1.62,1.55c.18,7.21,3.38,10,7.27,13.32.59.51,1.21,1,1.62,1.41,7.39,6.57,16.4,6.92,23.54,0l1.65-1.56ZM57.74,62.68a1.2,1.2,0,0,1-.41-.79,1.15,1.15,0,0,1,.27-.84,1.17,1.17,0,0,1,.8-.42,1.15,1.15,0,0,1,.84.27,1.85,1.85,0,0,0,2.42,0,1.16,1.16,0,0,1,.87-.28,1.19,1.19,0,0,1,.77.4l.05,0a1.21,1.21,0,0,1,.24.83,1.19,1.19,0,0,1-.42.79,4.18,4.18,0,0,1-5.41,0ZM25.9,21.88C42,2.05,60.45-8.73,74.34,8.91c16.74.88,23.45,27.47,10.1,38.66,0,.22,0,.44-.08.66a7.43,7.43,0,0,1,1.55-.3,5,5,0,0,1,2.73.52,3.86,3.86,0,0,1,1.9,2.31,7,7,0,0,1-.09,4,1.42,1.42,0,0,1,0,.16l-2,5.76A4.24,4.24,0,0,1,87,62.82a3.93,3.93,0,0,1-2.83.69l-.58-.07C83.5,70,80.28,73.07,76.06,77,79.36,88.21,87.35,90,95.13,91.64c10.68,2.33,25.79,2.63,25.79,24.43v5.22a1.59,1.59,0,0,1-1.59,1.59H1.59A1.59,1.59,0,0,1,0,121.29v-4.71C0,93.79,15.82,94.09,27.1,92.4c8.13-1.22,16.41-2.46,19.63-13.6-.59-.51-1.17-1-1.77-1.54-4.13-3.56-7.59-6.54-8.25-13.8h-.37a4.91,4.91,0,0,1-2.43-.64,6.69,6.69,0,0,1-2.68-3.25,14.8,14.8,0,0,1-1.07-4.88c0-.51,0-1.52,0-2.49a20,20,0,0,1,.13-2.1,1.26,1.26,0,0,1,.1-.38c.87-2.42,2.2-3.2,3.94-3.15l-1.15-.77C32.56,38,34.39,24.45,25.9,21.88Zm24.24,59.9a9.33,9.33,0,0,1-.84-.55c-2.17,6.28-5.76,9.56-10,11.46A39,39,0,0,0,60.8,98.32,37.48,37.48,0,0,0,82.58,90.9c-3.72-2.1-6.91-5.4-9-11.14-6.27,5.73-16.28,6.41-23.47,2Zm.34-34.86a2.64,2.64,0,1,1-2.64,2.64,2.64,2.64,0,0,1,2.64-2.64ZM51.9,66.59H68c1.49-.06,1.88.73,1.38,1.82-4.31,9.72-18.5,4.93-18.69-.13,0-.75.36-1.63,1.2-1.69Zm24.53-21A1.15,1.15,0,1,1,74.6,47a5.13,5.13,0,0,0-2.94-2.12,6.2,6.2,0,0,0-3.39.31A1.15,1.15,0,1,1,67.54,43c3.58-1.21,6.58-.46,8.89,2.61ZM53.38,43a1.14,1.14,0,1,1-.72,2.17,6.12,6.12,0,0,0-3.4-.3A5.19,5.19,0,0,0,46.32,47a1.14,1.14,0,1,1-1.83-1.37c2.31-3.09,5.33-3.82,8.89-2.61Zm-.24,25.12h14c-1.13,3.38-12.72,3.31-14,0Z\"/></svg>"
 
 [<AutoOpen>]
 module SymbolIcon =
@@ -142,7 +149,7 @@ let showErrorMsgBoxAsync(text: string) =
         return box.ShowAsync()
     }
 
-let choosePicturePath () =
+let choosepicture () =
     async {
         let win = getMainWindow ()
 
@@ -321,7 +328,52 @@ let getCertificationsXml (certifications: ObservableCollection<Certification>) =
         ))
     |> Seq.toArray
 
-let getXmlDoc(picturePath: string, name: string, headline: string, email: string,
+let getPictureFromFile (inputPath: string) =
+    let imageBytes = File.ReadAllBytes inputPath
+
+    let mime =
+        match Path.GetExtension(inputPath).ToLowerInvariant() with
+        | ".jpg"
+        | ".jpeg" -> "image/jpeg"
+        | ".png" -> "image/png"
+        | ".gif" -> "image/gif"
+        | ".bmp" -> "image/bmp"
+        | _ -> "application/octet-stream"
+
+    let base64 = Convert.ToBase64String imageBytes
+    sprintf "data:%s;base64,%s" mime base64
+
+let ResizeAndGetBase64 (inputPath: string, maxSize: int, quality: int) : string =
+    use original = SKBitmap.Decode inputPath
+
+    if
+        original.Width > maxSize && float32 original.Width / float32 maxSize > 1.3f
+        || original.Height > maxSize && float32 original.Height / float32 maxSize > 1.3f
+    then
+        let b = original.Width > original.Height
+
+        let ratio =
+            if b then
+                float32 maxSize / float32 original.Width
+            else
+                float32 maxSize / float32 original.Height
+
+        let newWidth = if b then maxSize else int (float32 original.Width * ratio)
+        let newHeight = if b then int (float32 original.Height * ratio) else maxSize
+        use resized = new SKBitmap(newWidth, newHeight)
+
+        if original.ScalePixels(resized, SKFilterQuality.Medium) then
+            use image = SKImage.FromBitmap resized
+            use data = image.Encode(SKEncodedImageFormat.Jpeg, quality)
+            let imageBytes = data.ToArray()
+            let base64 = Convert.ToBase64String imageBytes
+            sprintf "data:image/jpeg;base64,%s" base64
+        else
+            getPictureFromFile inputPath
+    else
+        getPictureFromFile inputPath
+
+let getXmlDoc(picture: string, name: string, headline: string, email: string,
     phone: string, location: string, links: ObservableCollection<string>, summary: string,
     experiences: ObservableCollection<Experience>, languages: ObservableCollection<Language>,
     skills: ObservableCollection<Skill>, certifications: ObservableCollection<Certification>,
@@ -335,31 +387,19 @@ let getXmlDoc(picturePath: string, name: string, headline: string, email: string
                 let filePath = if uri.IsFile then uri.LocalPath else path
 
                 if File.Exists filePath then
-                    let bytes = File.ReadAllBytes filePath
-
-                    let mime =
-                        match Path.GetExtension(filePath).ToLowerInvariant() with
-                        | ".jpg"
-                        | ".jpeg" -> "image/jpeg"
-                        | ".png" -> "image/png"
-                        | ".gif" -> "image/gif"
-                        | ".bmp" -> "image/bmp"
-                        | _ -> "application/octet-stream"
-
-                    let base64 = Convert.ToBase64String(bytes)
-                    sprintf "data:%s;base64,%s" mime base64
+                    ResizeAndGetBase64(filePath, 140, 75)
                 else
                     path
             with _ ->
                 path
 
-    let pictureValue = embedPicture picturePath
+    let pictureValue = embedPicture picture
 
     let doc =
         XDocument(
             XElement(
                 "resume",
-                XElement("picturePath", pictureValue),
+                XElement("picture", pictureValue),
                 XElement("name", name),
                 XElement("headline", headline),
                 XElement("email", email),
@@ -498,7 +538,7 @@ let loadFromXml (states: LoadStates) =
                     if isNull el then "" else el.Value
 
                 // picture
-                let pic = get "picturePath"
+                let pic = get "picture"
 
                 if not (String.IsNullOrWhiteSpace pic) then
                     states.pictureUriState.Set(tryMakeUri pic)
@@ -671,42 +711,69 @@ let loadFromXml (states: LoadStates) =
     }
     |> Async.StartImmediate
 
-let pictureTabConent (imgSource: Bitmap, pictureUriState: IWritable<option<Uri>>) =
-    StackPanel.create [ 
-            StackPanel.orientation Orientation.Vertical
-            StackPanel.verticalAlignment VerticalAlignment.Top            
-            StackPanel.children [
-                Image.create [Image.source imgSource;Image.maxHeight 120.0;Image.maxWidth 120.0 ]
-                TextBox.create [ 
-                    TextBox.watermark "Image path"
-                    TextBox.height 30.0
-                    TextBox.text (
-                        pictureUriState.Current
-                        |> Option.map (fun u -> u.OriginalString)
-                        |> Option.defaultValue "" )
-                    TextBox.onTextChanged (fun t ->
-                        match tryMakeUri t with
-                        | Some u -> pictureUriState.Set(Some u)
-                        | None -> pictureUriState.Set None)]
-                Button.create [
-                    Button.content "Choose picture"
-                    Button.horizontalAlignment HorizontalAlignment.Right
-                    Button.onClick (fun _ ->
-                        async {
-                            let! opt = choosePicturePath ()
-                            opt |> Option.iter(fun p -> pictureUriState.Set(Some p))
-                        }
-                        |> Async.StartImmediate)                     
-                ] ] ]    
+let getPictureFromBase64 (s: string) =
+    try
+        let comma = s.IndexOf ','
+
+        if comma >= 0 then
+            let base64 = s.Substring(comma + 1)
+            let bytes = Convert.FromBase64String base64
+            use ms = new MemoryStream(bytes)
+            new Bitmap(ms)
+        else
+            null
+    with _ ->
+        null
+
+let loadSvgImageFromString (xml: string) =
+    try
+        let source = SvgSource.LoadFromSvg xml        
+        let svgImage = SvgImage()
+        svgImage.Source <- source
+        svgImage :> IImage
+    with ex -> 
+        printfn "Error loading SVG: %s" ex.Message
+        null      
 
 let basicInfoTabContent (name: IWritable<string>, 
     headline: IWritable<string>, email: IWritable<string>, 
     phone: IWritable<string>, location: IWritable<string>,
     links: IWritable<ObservableCollection<string>>, selectedLink: IWritable<string>,
-    newLink: IWritable<string>, selectedLinkIndex: IWritable<int>) =
+    newLink: IWritable<string>, selectedLinkIndex: IWritable<int>,
+    imgSource: Bitmap, pictureUriState: IWritable<option<Uri>>) =
     StackPanel.create [
         StackPanel.orientation Orientation.Vertical
         StackPanel.children [
+            Border.create [
+                Border.background "#fff"
+                Border.maxWidth 120.0
+                Border.maxHeight 120.0
+                Border.cornerRadius 4.0
+                Border.isVisible pictureUriState.Current.IsNone
+                Border.child (
+                    Image.create [
+                        Image.init( fun x ->
+                            x.Source <- loadSvgImageFromString defaultPicture
+                        )                            
+                        Image.minWidth 120.0
+                        Image.minHeight 120.0
+                        Image.isVisible pictureUriState.Current.IsNone
+                    ]
+                )
+            ]                
+            Image.create [Image.source imgSource;Image.maxHeight 120.0;Image.maxWidth 120.0 ]
+
+            Button.create [
+                Button.content "Choose picture"
+                Button.width 120.0
+                Button.horizontalAlignment HorizontalAlignment.Center
+                Button.onClick (fun _ ->
+                    async {
+                        let! opt = choosepicture ()
+                        opt |> Option.iter(fun p -> pictureUriState.Set(Some p))
+                    }
+                    |> Async.StartImmediate)                     
+            ]            
             TextBox.create [ 
                 TextBox.watermark "Name"
                 TextBox.text name.Current
@@ -735,6 +802,7 @@ let basicInfoTabContent (name: IWritable<string>,
                 TextBlock.text "Links:" ]
             ListBox.create [ 
                 ListBox.dataItems links.Current
+                ListBox.maxHeight 124.0
                 ListBox.selectionMode SelectionMode.Single
                 ListBox.selectedItem selectedLink.Current
                 ListBox.onSelectedIndexChanged (fun index -> selectedLinkIndex.Set index)
@@ -787,11 +855,10 @@ let summaryTabContent (summary: IWritable<string>) =
         TextBox.watermark "Summary (markdown)"
         TextBox.margin 10.0
         TextBox.padding 10.0
-        TextBox.verticalAlignment VerticalAlignment.Top
+        TextBox.verticalAlignment VerticalAlignment.Stretch
         TextBox.text summary.Current
         TextBox.onTextChanged (fun t -> summary.Set t)
         TextBox.acceptsReturn true
-        TextBox.height 370.0
         TextBox.verticalScrollBarVisibility ScrollBarVisibility.Visible
         TextBox.horizontalScrollBarVisibility ScrollBarVisibility.Visible ]    
 
@@ -803,6 +870,7 @@ let experienceTabContent (experiences: IWritable<ObservableCollection<Experience
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems experiences.Current
+                ListBox.maxHeight 164.0
                 ListBox.selectionMode SelectionMode.Single
                 ListBox.onSelectionChanged (fun args ->
                 if args.AddedItems.Count > 0
@@ -858,7 +926,7 @@ let experienceTabContent (experiences: IWritable<ObservableCollection<Experience
                 TextBox.text description.Current
                 TextBox.onTextChanged (fun t -> description.Set t)
                 TextBox.acceptsReturn true
-                TextBox.height 80.0
+                TextBox.height 200.0
                 TextBox.verticalScrollBarVisibility ScrollBarVisibility.Auto ]
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
@@ -934,6 +1002,7 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems languages.Current
+                ListBox.maxHeight 404.0
                 ListBox.selectionMode SelectionMode.Single
                 ListBox.onSelectionChanged (fun args ->
                         if args.AddedItems.Count > 0
@@ -962,20 +1031,19 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
                 TextBox.onTextChanged (fun t -> fluency.Set t) ]
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
+                StackPanel.verticalAlignment VerticalAlignment.Center
                 StackPanel.children [ 
                     TextBlock.create [ 
                         TextBlock.text "Level: " ]
-                    Slider.create [ 
-                        Slider.minimum 0.0
-                        Slider.maximum 5.0
-                        Slider.tickFrequency 1.0
-                        Slider.tickPlacement TickPlacement.Outside
-                        Slider.value (float level.Current)
-                        Slider.onValueChanged (fun v -> level.Set(int v))
-                        Slider.width 200.0 ]
-                    TextBlock.create [ 
-                        TextBlock.text (string level.Current
-                            ) ] ] ]
+                    NumericUpDown.create [ 
+                        NumericUpDown.minimum 1.0m
+                        NumericUpDown.maximum 5.0m
+                        NumericUpDown.increment 1.0m
+                        NumericUpDown.formatString "0"
+                        NumericUpDown.value (decimal level.Current)
+                        NumericUpDown.onValueChanged (fun v -> 
+                            level.Set(int (if v.HasValue then v.Value else 1.0m)))
+                        NumericUpDown.width 150.0 ] ] ]
             StackPanel.create [ 
                 StackPanel.orientation Orientation.Horizontal
                 StackPanel.horizontalAlignment HorizontalAlignment.Right
@@ -996,7 +1064,7 @@ let languagesTabContent (languages: IWritable<ObservableCollection<Language>>, s
                                     languages.Current.Add lang
                                     name.Set ""
                                     fluency.Set ""
-                                    level.Set 0) ]
+                                    level.Set 1) ]
                     Button.create [ 
                         Button.content "Update"
                         StackPanel.classes ["standart"]
@@ -1030,6 +1098,7 @@ let skillsTabContent (skills: IWritable<ObservableCollection<Skill>>, selectedIn
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems skills.Current
+                ListBox.maxHeight 444.0
                 ListBox.selectionMode SelectionMode.Single
                 ListBox.onSelectionChanged (fun args ->
                         if args.AddedItems.Count > 0
@@ -1118,6 +1187,7 @@ let cerificationsTabContent (certifications: IWritable<ObservableCollection<Cert
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems certifications.Current
+                ListBox.maxHeight 364.0
                 ListBox.selectionMode SelectionMode.Single
                 ListBox.onSelectionChanged (fun args ->
                     if args.AddedItems.Count > 0
@@ -1238,6 +1308,7 @@ let educationTabContent (educations: IWritable<ObservableCollection<Education>>,
         StackPanel.children [ 
             ListBox.create [ 
                 ListBox.dataItems educations.Current
+                ListBox.maxHeight 284.0
                 ListBox.selectionMode SelectionMode.Single
                 ListBox.onSelectionChanged (fun args ->
                     if args.AddedItems.Count > 0
@@ -1388,7 +1459,7 @@ type Views =
             let languagesState = ctx.useState (ObservableCollection<Language>())
             let newLangNameState = ctx.useState ""
             let newLangFluencyState = ctx.useState ""
-            let newLangLevelState = ctx.useState 0
+            let newLangLevelState = ctx.useState 1
             let selectedLangIndexState = ctx.useState -1
 
             let skillsState = ctx.useState (ObservableCollection<Skill>())
@@ -1432,18 +1503,7 @@ type Views =
                     let s = uri.OriginalString
 
                     if s.StartsWith "data:" then
-                        try
-                            let comma = s.IndexOf ','
-
-                            if comma >= 0 then
-                                let base64 = s.Substring(comma + 1)
-                                let bytes = Convert.FromBase64String base64
-                                use ms = new MemoryStream(bytes)
-                                new Bitmap(ms)
-                            else
-                                null
-                        with _ ->
-                            null
+                        getPictureFromBase64 s
                     else
                         let path = HttpUtility.UrlDecode uri.AbsolutePath
 
@@ -1525,6 +1585,22 @@ type Views =
                   skillsState = skillsState
                   certificationsState = certificationsState
                   educationsState = educationsState }
+
+            let clearStates () =
+                transact (fun () ->
+                pictureUriState.Set None
+                nameState.Set ""
+                headlineState.Set ""
+                emailState.Set ""
+                phoneState.Set ""
+                locationState.Set ""
+                linksState.Set (ObservableCollection<string>())
+                summaryState.Set ""
+                experiencesState.Set (ObservableCollection<Experience>())
+                languagesState.Set (ObservableCollection<Language>())
+                skillsState.Set (ObservableCollection<Skill>())
+                certificationsState.Set (ObservableCollection<Certification>())
+                educationsState.Set (ObservableCollection<Education>()))
             
             let getTabHeader(title: string, symbol: Symbol) =
                 StackPanel.create [
@@ -1559,13 +1635,11 @@ type Views =
                                                 TabControl.tabStripPlacement Dock.Left
                                                 TabControl.viewItems [
                                                     TabItem.create [
-                                                            TabItem.header (getTabHeader("Picture", Symbol.Image))
-                                                            TabItem.content (pictureTabConent(imgSource, pictureUriState))]
-                                                    TabItem.create [
                                                             TabItem.header (getTabHeader("Basic Info", Symbol.PersonInfo))
                                                             TabItem.content (basicInfoTabContent(nameState, headlineState, 
                                                                 emailState, phoneState, locationState, linksState,
-                                                                selectedLinkState, newLinkState, selectedLinkIndexState))]
+                                                                selectedLinkState, newLinkState, selectedLinkIndexState,
+                                                                imgSource, pictureUriState))]
                                                     TabItem.create [
                                                             TabItem.header (getTabHeader("Summary", Symbol.Markdown))
                                                             TabItem.content (summaryTabContent summaryState)]
@@ -1617,6 +1691,10 @@ type Views =
                                                                 TextBlock.create [ TextBlock.text f.Name ])
                                                         )                                                                                                                 
                                                     ]
+                                                    Button.create [
+                                                        Button.content "Clear"
+                                                        Button.onClick (fun _ -> clearStates())
+                                                    ]                                                    
                                                     Button.create [
                                                         Button.content "Load from XML"
                                                         Button.onClick (fun _ -> loadFromXml states)
@@ -1670,7 +1748,7 @@ type MainWindow() as this =
 
         base.Title <- "Resume Generator"
         base.Width <- 800.0
-        base.Height <- 600.0
+        base.Height <- 700.0
 #if INTERACTIVE        
         base.Icon <- new WindowIcon(new Bitmap(Path.Combine(getCurrentDirectory, "favicon.ico")))
 #endif        
@@ -1699,6 +1777,7 @@ type App() =
 let app =
     AppBuilder.Configure<App>()
         .UsePlatformDetect()
+        .UseSkia()
         .StartWithClassicDesktopLifetime 
         [||]
 #endif
@@ -1710,6 +1789,7 @@ module Program =
         AppBuilder
             .Configure<App>()
             .UsePlatformDetect()
+            .UseSkia()
             .StartWithClassicDesktopLifetime
             args
 #endif    

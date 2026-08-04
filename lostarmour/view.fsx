@@ -1,3 +1,4 @@
+#if INTERACTIVE
 #r "nuget: Avalonia, 12.1.0"
 #r "nuget: Avalonia.Desktop, 12.1.0"
 #r "nuget: Avalonia.Themes.Fluent, 12.1.0"
@@ -6,7 +7,8 @@
 #r "nuget: Avalonia.Controls.DataGrid, 12.1.0"
 #r "nuget: AvaloniaCommunity.FuncUI.Bindings.DataGrid, 12.0.0"
 #r "nuget: Microsoft.Data.Sqlite, 10.0.10"
-
+#r "nuget: SQLitePCLRaw.lib.e_sqlite3, 3.53.3"
+#endif
 open System
 open System.Collections.Generic
 open System.IO
@@ -108,9 +110,16 @@ type Msg =
 // ============================================================================
 // РАБОТА С БАЗОЙ ДАННЫХ
 // ============================================================================
+let getCurrentDirectory =
+    #if INTERACTIVE
+    __SOURCE_DIRECTORY__
+    #endif
+    #if COMPILED
+    AppContext.BaseDirectory
+    #endif
 
 module Database =
-    let connectionString = "Data Source=casualties.db"
+    let connectionString = sprintf "Data Source=%s" (Path.Combine(getCurrentDirectory, "casualties.db"))
     
     let getConnection() = 
         let conn = new SqliteConnection(connectionString)
@@ -461,7 +470,7 @@ module Application =
             { model with Filters = newFilters }, Elmish.Cmd.none
         
         | Search ->
-            let filters = { model.Filters with Offset = (model.CurrentPage - 1) * model.PageSize; Limit = model.PageSize }
+            let filters = { model.Filters with Offset = 0 * model.PageSize; Limit = model.PageSize }
             { model with IsLoading = true; StatusMessage = "Поиск..."},
             Elmish.Cmd.OfAsync.either Database.search filters SearchResult (fun ex -> SetStatus (sprintf "Ошибка: %s" ex.Message))
         
@@ -634,8 +643,11 @@ module Views =
                                         WrapPanel.create [
                                             WrapPanel.itemSpacing 10
                                             WrapPanel.children [
+                                                TextBlock.create [
+                                                    TextBlock.text "Звание:"
+                                                    TextBlock.verticalAlignment VerticalAlignment.Center
+                                                ]                                                
                                                 ComboBox.create [
-                                                    ComboBox.placeholderText "Звание"
                                                     ComboBox.width 150
                                                     ComboBox.dataItems (List.append [""] model.AvailableRanks)
                                                     ComboBox.selectedItem (
@@ -651,9 +663,11 @@ module Views =
                                                         dispatch (UpdateFilters (fun filters -> { filters with Rank = rank }))
                                                     )
                                                 ]
-                                                
+                                                TextBlock.create [
+                                                    TextBlock.text "Регион проживания:"
+                                                    TextBlock.verticalAlignment VerticalAlignment.Center
+                                                ]                                                
                                                 ComboBox.create [
-                                                    ComboBox.placeholderText "Регион"
                                                     ComboBox.width 150
                                                     ComboBox.dataItems (List.append [""] model.AvailableRegions)
                                                     ComboBox.selectedItem (
@@ -669,9 +683,11 @@ module Views =
                                                         dispatch (UpdateFilters (fun filters -> { filters with Region = region }))
                                                     )
                                                 ]
-                                                
+                                                TextBlock.create [
+                                                    TextBlock.text "Пол:"
+                                                    TextBlock.verticalAlignment VerticalAlignment.Center
+                                                ]                                                
                                                 ComboBox.create [
-                                                    ComboBox.placeholderText "Пол"
                                                     ComboBox.width 100
                                                     ComboBox.dataItems ["Все"; "Мужской"; "Женский"]
                                                     ComboBox.selectedItem (
@@ -759,6 +775,7 @@ module Views =
                                                     StackPanel.children [
                                                         TextBlock.create [
                                                             TextBlock.text "Дата рождения от: "
+                                                            TextBlock.width 130
                                                             TextBlock.verticalAlignment VerticalAlignment.Center
                                                         ]
                                                         DatePicker.create [
@@ -788,6 +805,7 @@ module Views =
                                                     StackPanel.children [
                                                         TextBlock.create [
                                                             TextBlock.text "Дата смерти от: "
+                                                            TextBlock.width 130
                                                             TextBlock.verticalAlignment VerticalAlignment.Center
                                                         ]
                                                         DatePicker.create [
@@ -860,8 +878,8 @@ module Views =
                         Border.create [
                             Border.cornerRadius 4
                             Border.background (
-                                if model.StatusMessage.Contains "Ошибка" then Brushes.IndianRed
-                                elif model.StatusMessage.Contains "Найдено" then Brushes.LightGreen
+                                if model.StatusMessage.Contains "Ошибка" then Brushes.DarkRed
+                                elif model.StatusMessage.Contains "Найдено" then Brushes.DarkGreen
                                 else Brushes.LightGray
                             )
                             Border.padding 5
@@ -1214,6 +1232,7 @@ module Views =
 // ============================================================================
 // ГЛАВНОЕ ОКНО
 // ============================================================================
+
 type MainWindow() as this =
     inherit HostWindow()
     do
@@ -1222,6 +1241,9 @@ type MainWindow() as this =
         base.Height <- 900.0
         base.MinWidth <- 900.0
         base.MinHeight <- 600.0
+#if INTERACTIVE        
+        base.Icon <- new WindowIcon(new Avalonia.Media.Imaging.Bitmap(Path.Combine(getCurrentDirectory, "favicon-32x32.ico")))
+#endif          
         
         let dbExists = Database.checkDatabaseExists()
         if not dbExists then
@@ -1255,7 +1277,20 @@ type App() =
             printfn "App running..."
         | _ -> ()   
 
+#if INTERACTIVE        
 let app =
     AppBuilder.Configure<App>()
         .UsePlatformDetect()
         .StartWithClassicDesktopLifetime([||])    
+#endif
+#if COMPILED
+module Program =
+    [<STAThread>]
+    [<EntryPoint>]
+    let main (args: string[]) =
+        AppBuilder
+            .Configure<App>()
+            .UsePlatformDetect()
+            .StartWithClassicDesktopLifetime
+            args
+#endif           

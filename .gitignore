@@ -401,3 +401,6 @@ FodyWeavers.xsd
 favorites.json
 countries.json
 tags.json
+
+# database files
+*.db

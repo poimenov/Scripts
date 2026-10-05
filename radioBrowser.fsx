@@ -22,6 +22,8 @@ open Avalonia.FuncUI
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Hosts
 open Avalonia.Layout
+open Avalonia.Threading
+open Avalonia.VisualTree
 open FluentIcons.Avalonia
 open System.Collections.ObjectModel
 open Avalonia.Input
@@ -102,7 +104,6 @@ module AutoCompleteBox =
             AttrBuilder<'t>
                 .CreateProperty<IEnumerable>(AutoCompleteBox.ItemsSourceProperty, value, ValueNone)
 
-
 [<AbstractClass; Sealed>]
 type Views =
 
@@ -118,13 +119,15 @@ type Views =
 
             let selectedItem = ctx.useState<Option<Station>> None
             let selectedCountry = ctx.useState<Option<NameAndCount>> None
-            let searchButtonEnabled = ctx.useState false
+            let searchButtonEnabled = ctx.useState true
             let playEnabled = ctx.useState false
             let isPlaying = ctx.useState false
             let searchText = ctx.useState ""
             let selectedTag = ctx.useState ""
             let nowPlaying = ctx.useState<string option> None
             let volume = ctx.useState 50
+            let scrollEnabled = ctx.useState true
+            let isLoading = ctx.useState false
             //https://wiki.videolan.org/VLC_command-line_help/
             let libVlc =
                 ctx.useState (new LibVLC [| "--network-caching=3000"; "--sout-livehttp-caching" |])
@@ -132,7 +135,6 @@ type Views =
             let countryHelper = ctx.useState (new CountryHelper())
 
             let chunk = 100u
-            let maxCount = 500
 
             let getPlatform =
                 if RuntimeInformation.IsOSPlatform OSPlatform.Windows then
@@ -232,7 +234,7 @@ type Views =
                             |> Seq.map (fun x -> x.CountryShortCode)
                             |> Set.ofSeq
 
-                        let result = countryCodes |> Seq.filter (fun x -> codes.Contains x.Name)
+                        let result = countryCodes |> Seq.filter (fun x -> codes.Contains x.Name) |> Seq.sortByDescending (fun x -> x.Stationcount)
                         let empty = new NameAndCount()
                         empty.Name <- ""
                         empty.Stationcount <- 0u
@@ -314,11 +316,13 @@ type Views =
                                 Async.StartWithContinuations(
                                     getDefaultStations,
                                     (fun stations ->
-                                        stations
-                                        |> Seq.iter (fun x ->
-                                            let item = convert (x, false)
-                                            item.IsFavorite <- isStationFavorite item
-                                            items.Current.Add(item))),
+                                        Dispatcher.UIThread.Post(fun () ->
+                                            stations
+                                            |> Seq.iter (fun x ->
+                                                let item = convert (x, false)
+                                                item.IsFavorite <- isStationFavorite item
+                                                items.Current.Add(item)))
+                                    ),
                                     (fun ex -> printfn "getDefaultStations: %A" ex),
                                     (fun _ -> ())
                                 )),
@@ -363,40 +367,49 @@ type Views =
 
                     opt.Country <- country.CountryName
 
-                printfn "Search options: Name = '%A', Tag = '%A', Country = '%A'" opt.Name opt.TagList opt.Country
                 opt
 
             let rec doSearchWithOptions (options: AdvancedSearchOptions) =
                 async {
                     try
-                        let client = RadioBrowserClient()
-                        let! results = client.Search.AdvancedAsync options |> Async.AwaitTask
+                        if scrollEnabled.Current then
+                            let client = RadioBrowserClient()
+                            let! results = client.Search.AdvancedAsync options |> Async.AwaitTask
 
-                        results
-                        |> Seq.iter (fun x ->
-                            let item = convert (x, false)
-                            item.IsFavorite <- isStationFavorite item
-                            items.Current.Add item)
-
-                        if results.Count = Convert.ToInt32 chunk && items.Current.Count < maxCount then
-                            options.Offset <- options.Offset.Value + chunk
-                            doSearchWithOptions options |> Async.Start
-                        else
-                            searchButtonEnabled.Set(true)
-                            printfn $"doSearchWithOptions finished. Count = {items.Current.Count}"
+                            Dispatcher.UIThread.Post(fun () ->
+                                results
+                                |> Seq.iter (fun x ->
+                                    let item = convert (x, false)
+                                    item.IsFavorite <- isStationFavorite item
+                                    items.Current.Add item)
+                                isLoading.Set false 
+                                searchButtonEnabled.Set true                                
+                                if results |> Seq.length < Convert.ToInt32 chunk then
+                                    scrollEnabled.Set false
+                            )
                     with ex ->
                         printfn "doSearchWithOptions: %A" ex
+                        Dispatcher.UIThread.Post(fun () -> 
+                        isLoading.Set false
+                        searchButtonEnabled.Set true) 
                 }
+
 
             let doSearch =
                 async {
                     searchButtonEnabled.Set false
+                    isLoading.Set false
+                    if not scrollEnabled.Current then
+                        scrollEnabled.Set true
 
                     if not isPlaying.Current then
                         playEnabled.Set false
 
-                    try
-                        items.Current.Clear()
+                    try                        
+                        Dispatcher.UIThread.Post(fun () ->
+                            items.Current.Clear()
+                        )
+
                         let options = getSearchOptions (Nullable.op_Implicit 0u)
 
                         if
@@ -407,17 +420,19 @@ type Views =
                             let client = RadioBrowserClient()
                             let! results = client.Stations.GetByVotesAsync chunk |> Async.AwaitTask
 
-                            results
-                            |> Seq.iter (fun x ->
-                                let item = convert (x, false)
-                                item.IsFavorite <- isStationFavorite item
-                                items.Current.Add item)
-
-                            searchButtonEnabled.Set true
-                        else
+                            Dispatcher.UIThread.Post(fun () ->
+                                results
+                                |> Seq.iter (fun x ->
+                                    let item = convert (x, false)
+                                    item.IsFavorite <- isStationFavorite item
+                                    items.Current.Add item)
+                                searchButtonEnabled.Set true
+                            )                            
+                        else 
                             doSearchWithOptions options |> Async.Start
+                        
                     with ex ->
-                        printfn "doSearch: %A" ex
+                        printfn "doSearch: %A" ex                    
                 }
 
             let play =
@@ -626,18 +641,6 @@ type Views =
                                   TextBlock.width 50
                                   TextBlock.textAlignment TextAlignment.Right ] ] ]
 
-            let setSearchButtonEnabled =
-                let enabled =
-                    not (String.IsNullOrWhiteSpace selectedTag.Current)
-                    || selectedCountry.Current.IsSome
-                       && selectedCountry.Current.Value.Stationcount > 0u
-                    || not (String.IsNullOrWhiteSpace searchText.Current)
-
-                if enabled <> searchButtonEnabled.Current then
-                    searchButtonEnabled.Set enabled
-
-                ()
-
             let getSearchPanel =
                 Grid.create
                     [ Grid.row 0
@@ -658,8 +661,7 @@ type Views =
                                        | :? NameAndCount as i -> Some i
                                        | _ -> failwith "Something went horribly wrong!")
                                       |> selectedCountry.Set
-
-                                      setSearchButtonEnabled) ]
+                                      ) ]
                             create
                                 [ Grid.column 1
                                   AutoCompleteBox.margin (1, 4, 4, 4)
@@ -674,8 +676,7 @@ type Views =
                                               printfn $"selectedTag = {tag}"
                                               selectedTag.Set(tag)
                                       | _ -> failwith "Something went horribly wrong!"
-
-                                      setSearchButtonEnabled)
+                                      )
                                   AutoCompleteBox.watermark "Station Tag" ]
                             TextBox.create
                                 [ Grid.column 2
@@ -687,11 +688,10 @@ type Views =
                                       if e.Key = Key.Enter then
                                           if searchButtonEnabled.Current then
                                               Async.StartImmediate doSearch
-                                      else
-                                          setSearchButtonEnabled)
+                                      )
                                   TextBox.onTextChanged (fun e ->
                                       searchText.Set(e.Trim())
-                                      setSearchButtonEnabled) ]
+                                      ) ]
                             Button.create
                                 [ Grid.column 3
                                   Button.margin 4
@@ -711,7 +711,6 @@ type Views =
                                           grid.Children |> Seq.filter (fun c -> c :? TextBox) |> Seq.head :?> TextBox
 
                                       searchText.Set textBox.Text
-                                      searchButtonEnabled.Set false
                                       Async.StartImmediate doSearch) ] ] ]
 
             let getStationsListBox (source: ObservableCollection<Station>) =
@@ -719,6 +718,22 @@ type Views =
                     [ Grid.row 1
                       ListBox.background (SolidColorBrush Colors.Transparent)
                       ListBox.dataItems source
+                      ListBox.onTemplateApplied (fun ta ->
+                          let lb = ta.Source :?> ListBox                   
+                          let scrollViewer = lb.FindDescendantOfType<ScrollViewer>() 
+                          if scrollViewer <> null then
+                              scrollViewer.ScrollChanged.Add(fun e ->
+                                let sv = e.Source :?> ScrollViewer
+                                let _offset = sv.Offset.Y                                  
+                                let _maxoffest = sv.Extent.Height - sv.Viewport.Height
+                                
+                                if _maxoffest - _offset < 50 && scrollEnabled.Current && not isLoading.Current then                                                                  
+                                    let options = getSearchOptions (Nullable.op_Implicit (uint32 items.Current.Count))
+                                    if not (String.IsNullOrEmpty options.Name) || not (String.IsNullOrEmpty options.Country) || not (String.IsNullOrEmpty options.TagList) then
+                                        isLoading.Set true  
+                                        searchButtonEnabled.Set false                                          
+                                        doSearchWithOptions options |> Async.Start)                          
+                          )
                       ListBox.itemsPanel (FuncTemplate<Panel>(fun () -> WrapPanel()))
                       ListBox.onSelectedItemChanged (fun item ->
                           match box item with

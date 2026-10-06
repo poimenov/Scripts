@@ -42,6 +42,8 @@ open Avalonia.Svg
 open System.Diagnostics
 open System.Runtime.InteropServices
 open System.Text.Json
+open System.Threading
+open Avalonia.Controls.Primitives
 
 [<Serializable>]
 type public Station
@@ -115,8 +117,6 @@ type Views =
             let countries =
                 ctx.useState<ObservableCollection<NameAndCount>> (ObservableCollection())
 
-            let tags = ctx.useState<ObservableCollection<string>> (ObservableCollection())
-
             let selectedItem = ctx.useState<Option<Station>> None
             let selectedCountry = ctx.useState<Option<NameAndCount>> None
             let searchButtonEnabled = ctx.useState true
@@ -128,6 +128,7 @@ type Views =
             let volume = ctx.useState 50
             let scrollEnabled = ctx.useState true
             let isLoading = ctx.useState false
+            let client = ctx.useState(new RadioBrowserClient()) 
             //https://wiki.videolan.org/VLC_command-line_help/
             let libVlc =
                 ctx.useState (new LibVLC [| "--network-caching=3000"; "--sout-livehttp-caching" |])
@@ -199,13 +200,11 @@ type Views =
 
             let getDefaultStations =
                 async {
-                    let client = RadioBrowserClient()
-                    return! client.Stations.GetByVotesAsync chunk |> Async.AwaitTask
+                    return! client.Current.Stations.GetByVotesAsync chunk |> Async.AwaitTask
                 }
 
             let favoritesPath = Path.Combine(__SOURCE_DIRECTORY__, "favorites.json")
             let countriesPath = Path.Combine(__SOURCE_DIRECTORY__, "countries.json")
-            let tagsPath = Path.Combine(__SOURCE_DIRECTORY__, "tags.json")
 
             let getFavStations =
                 async {
@@ -239,18 +238,6 @@ type Views =
                         empty.Name <- ""
                         empty.Stationcount <- 0u
                         return result |> Seq.insertAt 0 empty
-                }
-
-            let getTags =
-                async {
-                    if File.Exists tagsPath then
-                        let! jsonTags = File.ReadAllTextAsync tagsPath |> Async.AwaitTask
-                        let tags = JsonSerializer.Deserialize<string list> jsonTags
-                        return tags |> List.toSeq
-                    else
-                        let client = RadioBrowserClient()
-                        let! result = client.Lists.GetTagsAsync() |> Async.AwaitTask
-                        return result |> Seq.map (fun x -> x.Name)
                 }
 
             let getPlayer =
@@ -298,10 +285,6 @@ type Views =
 
                                 File.WriteAllText(countriesPath, countriesText)
 
-                            if tags.Current.Count > 0 then
-                                let tagsText = tags.Current |> Seq.toList |> JsonSerializer.Serialize<string list>
-                                File.WriteAllText(tagsPath, tagsText)
-
                             player.Current.Stop()
                             player.Current.Dispose()
                             libVlc.Current.Dispose())
@@ -336,13 +319,7 @@ type Views =
                             (fun ex -> printfn "getCountries: %A" ex),
                             (fun _ -> ())
                         )
-
-                        Async.StartWithContinuations(
-                            getTags,
-                            (fun _tags -> _tags |> Seq.iter (fun x -> tags.Current.Add x)),
-                            (fun ex -> printfn "getTags: %A" ex),
-                            (fun _ -> ())
-                        )),
+                        ),
                 triggers = [ EffectTrigger.AfterInit ]
             )
 
@@ -373,8 +350,7 @@ type Views =
                 async {
                     try
                         if scrollEnabled.Current then
-                            let client = RadioBrowserClient()
-                            let! results = client.Search.AdvancedAsync options |> Async.AwaitTask
+                            let! results = client.Current.Search.AdvancedAsync options |> Async.AwaitTask
 
                             Dispatcher.UIThread.Post(fun () ->
                                 results
@@ -417,8 +393,7 @@ type Views =
                             && String.IsNullOrEmpty options.Country
                             && String.IsNullOrEmpty options.TagList
                         then
-                            let client = RadioBrowserClient()
-                            let! results = client.Stations.GetByVotesAsync chunk |> Async.AwaitTask
+                            let! results = client.Current.Stations.GetByVotesAsync chunk |> Async.AwaitTask
 
                             Dispatcher.UIThread.Post(fun () ->
                                 results
@@ -667,16 +642,48 @@ type Views =
                                   AutoCompleteBox.margin (1, 4, 4, 4)
                                   AutoCompleteBox.verticalAlignment VerticalAlignment.Stretch
                                   AutoCompleteBox.filterMode AutoCompleteFilterMode.StartsWith
-                                  AutoCompleteBox.itemsSource tags.Current
+                                  AutoCompleteBox.minimumPopulationDelay (TimeSpan.FromMilliseconds 400.0)
+                                  AutoCompleteBox.minimumPrefixLength 2
+                                  AutoCompleteBox.width 185.0
+                                  AutoCompleteBox.itemTemplate (
+                                      DataTemplateView<_>.create (fun (data: NameAndCount) ->
+                                          StackPanel.create
+                                              [ StackPanel.orientation Orientation.Horizontal
+                                                StackPanel.width 185
+                                                StackPanel.children
+                                                    [ TextBlock.create
+                                                          [ TextBlock.text data.Name
+                                                            TextBlock.textTrimming TextTrimming.CharacterEllipsis
+                                                            TextBlock.textWrapping TextWrapping.NoWrap
+                                                            TextBlock.horizontalAlignment HorizontalAlignment.Stretch
+                                                            TextBlock.tip data.Name
+                                                            TextBlock.width 135 ]
+                                                      TextBlock.create
+                                                          [ TextBlock.text (data.Stationcount.ToString())
+                                                            TextBlock.width 50
+                                                            TextBlock.textAlignment TextAlignment.Right ] ] ]
+                                      )
+                                  )
+                                  AutoCompleteBox.asyncPopulator (Func<string, CancellationToken, Tasks.Task<Collections.Generic.IEnumerable<obj>>>(
+                                      fun text token ->                                          
+                                          async {
+                                              let! result = client.Current.Lists.GetTagsAsync(text) |> Async.AwaitTask
+                                              printfn $"Searching for tags: {text}, found {result |> Seq.length} tags"
+                                              return result 
+                                                |> Seq.sortByDescending (fun x -> x.Stationcount) 
+                                                |> Seq.map (fun x -> x :> obj)
+                                          }
+                                          |> Async.StartAsTask
+                                  ))
+                                  AutoCompleteBox.valueMemberBinding (Data.Binding "Name")
                                   AutoCompleteBox.onSelectedItemChanged (fun item ->
                                       match item with
-                                      | null -> selectedTag.Set("")
-                                      | :? string as tag ->
-                                          if tags.Current.Contains tag then
-                                              printfn $"selectedTag = {tag}"
-                                              selectedTag.Set(tag)
-                                      | _ -> failwith "Something went horribly wrong!"
-                                      )
+                                      | null -> selectedTag.Set ""
+                                      | :? NameAndCount as tagItem ->
+                                              printfn $"selectedTag = {tagItem.Name}"
+                                              selectedTag.Set tagItem.Name
+                                      | _ -> failwith "Something went horribly wrong!"                                    
+                                  )
                                   AutoCompleteBox.watermark "Station Tag" ]
                             TextBox.create
                                 [ Grid.column 2
@@ -928,11 +935,11 @@ type MainWindow() as this =
             let style = new Style(fun x -> x.OfType typeof<ListBoxItem>)
             style.Setters.Add(Setter(ListBoxItem.PaddingProperty, Thickness 2.0))
             style.Setters.Add(Setter(ListBoxItem.CornerRadiusProperty, CornerRadius 5.0))
-            style.Setters.Add(Setter(ListBoxItem.WidthProperty, 360.0))
+            style.Setters.Add(Setter(ListBoxItem.MinWidthProperty, 185.0))
             style.Setters.Add(Setter(ListBoxItem.BorderBrushProperty, Brushes.Gray))
             style.Setters.Add(Setter(ListBoxItem.BorderThicknessProperty, Thickness 1.0))
             style.Setters.Add(Setter(ListBoxItem.MarginProperty, Thickness 2.0))
-            style :> IStyle
+            style :> IStyle       
 
         base.Title <- "Radio Browser"
         base.Width <- 780.0

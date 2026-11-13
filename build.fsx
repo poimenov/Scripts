@@ -13,7 +13,10 @@
 //# С указанием платформ
 //dotnet fsi build.fsx ./MyProject/MyProject.csproj ./artifacts "win-x64,linux-x64,osx-x64"
 
+#r "System.Formats.Tar"
+
 open System
+open System.Formats.Tar
 open System.IO
 open System.IO.Compression
 open System.Xml.Linq
@@ -112,12 +115,17 @@ let publishProject (rid: string) (isSelfContained: bool) =
             "framework-dependent"
 
     let platformPublishDir = Path.Combine(publishDir, rid)
+    let archiveExtension =
+        if rid.StartsWith("linux", StringComparison.OrdinalIgnoreCase) then
+            ".tar.gz"
+        else
+            ".zip"
 
     let archiveName =
         if isSelfContained then
-            $"{projectName}-self-contained-{rid}-{version}.zip"
+            $"{projectName}-self-contained-{rid}-{version}{archiveExtension}"
         else
-            $"{projectName}-{rid}-{version}.zip"
+            $"{projectName}-{rid}-{version}{archiveExtension}"
 
     let archivePath = Path.Combine(outputPathParam, archiveName)
 
@@ -158,7 +166,13 @@ let publishProject (rid: string) (isSelfContained: bool) =
         writeInfo $"Создание архива для {sc} {rid}..."
 
         if Directory.Exists platformPublishDir then
-            ZipFile.CreateFromDirectory(platformPublishDir, archivePath, CompressionLevel.Optimal, false)
+            if archiveExtension = ".tar.gz" then
+                use archive = File.Create archivePath
+                use gzip = new GZipStream(archive, CompressionLevel.Optimal)
+                TarFile.CreateFromDirectory(platformPublishDir, gzip, false)
+            else
+                ZipFile.CreateFromDirectory(platformPublishDir, archivePath, CompressionLevel.Optimal, false)
+
             writeSuccess $"Архив создан: {archivePath}"
 
         // Очистка временной папки
